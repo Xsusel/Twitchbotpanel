@@ -30,6 +30,15 @@ chmod +x setup.sh
    - Twitch IRC Token
    - Discord Webhook (opcjonalnie)
 
+### Jak zdobyć Twitch IRC Token?
+Jako że oficjalny generator TMI został wyłączony, skorzystaj z [Twitch Token Generator](https://twitchtokengenerator.com/) (by swiftyspiffy).
+1. Wejdź na stronę.
+2. Wybierz "Custom Scope Token".
+3. Zaznacz uprawnienia (Scopes):
+   - `chat:read`
+   - `chat:edit`
+4. Wygeneruj token i skopiuj "Access Token". To jest Twój `Twitch IRC Token`.
+
 ## Instalacja Ręczna (Opcjonalnie)
 
 Jeśli wolisz instalację ręczną, wykonaj poniższe kroki:

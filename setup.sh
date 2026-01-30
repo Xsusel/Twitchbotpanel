@@ -51,7 +51,12 @@ else
     echo "Please enter your Twitch Application Credentials:"
     read -p "Twitch Client ID: " TWITCH_CLIENT_ID
     read -p "Twitch Client Secret: " TWITCH_CLIENT_SECRET
-    read -p "Twitch IRC Token (oauth:...): " TWITCH_IRC_TOKEN
+
+    echo ""
+    echo "[!] INFO: To get the Twitch IRC Token, visit: https://twitchtokengenerator.com/"
+    echo "    Select 'Custom Scope Token' and check: chat:read, chat:edit"
+    echo ""
+    read -p "Twitch IRC Token (Access Token): " TWITCH_IRC_TOKEN
     read -p "Discord Webhook URL (optional, press Enter to skip): " DISCORD_WEBHOOK_URL
 
     cat > .env <<EOF
