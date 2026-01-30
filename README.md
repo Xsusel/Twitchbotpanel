@@ -94,11 +94,10 @@ Aplikacja dostępna pod adresem: `http://Twitch.xsus.pl` (lub IP serwera).
 Hasło dostępu: `tytanic232@`
 
 ## Aktualizacja
-Aby zaktualizować aplikację, kliknij przycisk "Check for Updates" w panelu dashboard lub wykonaj:
+Aby zaktualizować aplikację, kliknij przycisk "Check for Updates" w panelu dashboard lub wykonaj skrypt aktualizacyjny (jako root):
 ```bash
 cd /opt/xsus_sentinel
-git pull
-systemctl restart xsus-web xsus-bot xsus-celery
+./update_code.sh
 ```
 
 ## Struktura Katalogów
