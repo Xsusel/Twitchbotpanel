@@ -6,6 +6,9 @@ import requests
 import json
 from config import Config
 from sqlalchemy import func
+from app.ml_engine import MLDetector
+
+ml_detector = MLDetector()
 
 def get_twitch_users_info(usernames):
     if not usernames or not Config.TWITCH_CLIENT_ID or not Config.TWITCH_CLIENT_SECRET:
@@ -152,6 +155,13 @@ def analyze_channel(channel_id):
             except Exception as e:
                 print(f"Hive mind query error: {e}")
 
+        # ML Anomaly Detection
+        ml_score, anomaly_indices = ml_detector.detect_anomalies(messages)
+        if ml_score > 20: # High percentage of weird messages
+            score += 10
+        if ml_score > 50:
+            score += 10
+
         score = min(score, 100.0)
 
         # Alerting
@@ -169,7 +179,8 @@ def analyze_channel(channel_id):
                 "languages": langs,
                 "account_age": age_stats,
                 "sentiment": sentiment,
-                "hive_mind": hive_mind_stats
+                "hive_mind": hive_mind_stats,
+                "ml_anomaly_score": ml_score
             }
         )
         db.session.add(result)

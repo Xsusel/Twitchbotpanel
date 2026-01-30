@@ -11,3 +11,7 @@ python-levenshtein
 gunicorn
 requests
 textblob
+scikit-learn
+pandas
+wordcloud
+matplotlib

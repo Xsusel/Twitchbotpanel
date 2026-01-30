@@ -36,6 +36,28 @@
                 <p>Loading...</p>
             </div>
         </div>
+
+        <!-- ML Anomaly -->
+        <div class="card">
+            <h3>AI Detection (Isolation Forest)</h3>
+            <div id="mlData">
+                <p>Loading...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Word Cloud -->
+    <div class="card full-width" style="margin-top: 20px; text-align: center;">
+        <h3>Chat Word Cloud</h3>
+        <img src="{{ url_for('main.api_wordcloud', channel_id=channel.id) }}" alt="Word Cloud" style="max-width: 100%; height: auto; border-radius: 8px;">
+    </div>
+
+    <!-- History Chart -->
+    <div class="card full-width" style="margin-top: 20px;">
+        <h3>Bot Score History (Last 7 Days)</h3>
+        <div class="chart-container">
+            <canvas id="historyChart"></canvas>
+        </div>
     </div>
 
     <!-- Chat Logs -->
@@ -50,6 +72,7 @@
     <div class="card full-width" style="margin-top: 20px;">
         <h3>Actions</h3>
         <a href="{{ url_for('main.trigger_analysis', channel_id=channel.id) }}" class="btn">Run Manual Analysis (Celery)</a>
+        <a href="{{ url_for('main.export_chat', channel_id=channel.id) }}" class="btn" style="background-color: #28a745;">Export CSV</a>
         <a href="{{ url_for('main.index') }}" class="btn" style="background-color: #666;">Back to Dashboard</a>
     </div>
 </div>
@@ -58,8 +81,10 @@
     const channelId = {{ channel.id }};
     const ctx = document.getElementById('ratioChart').getContext('2d');
     const ctxLang = document.getElementById('langChart').getContext('2d');
+    const ctxHist = document.getElementById('historyChart').getContext('2d');
     let ratioChart;
     let langChart;
+    let historyChart;
 
     async function fetchStats() {
         try {
@@ -200,8 +225,59 @@
                 advDiv.innerHTML = '<p>No advanced data.</p>';
             }
 
+            // ML Anomaly
+            const mlDiv = document.getElementById('mlData');
+            if (data.ml_anomaly_score !== undefined) {
+                mlDiv.innerHTML = `
+                     <div class="stat-box">
+                        <h4>Anomaly Score</h4>
+                        <span class="stat-value ${data.ml_anomaly_score > 20 ? 'bad' : 'good'}">${data.ml_anomaly_score.toFixed(1)}%</span>
+                        <p style="margin:0; font-size:0.8em;">Messages flagged as anomalous</p>
+                    </div>
+                `;
+            } else {
+                mlDiv.innerHTML = '<p>No ML data yet.</p>';
+            }
+
         } catch (error) {
             console.error('Error fetching analysis:', error);
+        }
+    }
+
+    async function fetchHistory() {
+        try {
+            const response = await fetch(`/api/history/${channelId}`);
+            const data = await response.json();
+
+            if (historyChart) {
+                historyChart.data.labels = data.labels;
+                historyChart.data.datasets[0].data = data.scores;
+                historyChart.update();
+            } else {
+                historyChart = new Chart(ctxHist, {
+                    type: 'line',
+                    data: {
+                        labels: data.labels,
+                        datasets: [{
+                            label: 'Bot Score (%)',
+                            data: data.scores,
+                            borderColor: '#cf6679',
+                            tension: 0.1,
+                            fill: true,
+                            backgroundColor: 'rgba(207, 102, 121, 0.2)'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: { beginAtZero: true, max: 100 }
+                        }
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('Error fetching history:', error);
         }
     }
 
@@ -245,10 +321,12 @@
     fetchStats();
     fetchLogs();
     fetchAnalysis();
+    fetchHistory();
 
     // Refresh every 30 seconds
     setInterval(fetchStats, 30000);
     setInterval(fetchLogs, 30000);
     setInterval(fetchAnalysis, 30000);
+    setInterval(fetchHistory, 60000);
 </script>
 {% endblock %}

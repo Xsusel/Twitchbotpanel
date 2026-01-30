@@ -3,6 +3,9 @@ from langdetect import detect, LangDetectException
 import statistics
 from datetime import datetime
 from textblob import TextBlob
+from wordcloud import WordCloud
+import io
+import base64
 
 def calculate_ratio(viewer_count, chatter_count):
     if viewer_count == 0:
@@ -195,6 +198,24 @@ def analyze_sentiment(messages):
         'polarity': round(avg_polarity, 2),
         'subjectivity': round(avg_subjectivity, 2)
     }
+
+def generate_wordcloud(messages):
+    """
+    Generates a word cloud image (PNG bytes).
+    """
+    if not messages:
+        return None
+
+    text = " ".join([msg.message if hasattr(msg, 'message') else msg.get('message', '') for msg in messages])
+    if not text.strip():
+        return None
+
+    wc = WordCloud(width=800, height=400, background_color='black', colormap='Blues').generate(text)
+
+    img_io = io.BytesIO()
+    wc.to_image().save(img_io, 'PNG')
+    img_io.seek(0)
+    return img_io
 
 def calculate_bot_score(viewer_count, chatter_count, messages):
     """

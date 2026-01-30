@@ -1,9 +1,12 @@
-from flask import Blueprint, render_template, request, redirect, url_for, jsonify, flash
+from flask import Blueprint, render_template, request, redirect, url_for, jsonify, flash, send_file, Response
 from app.models import db, Channel, ChatMessage, StreamStats, AnalysisResult
 from app.auth import login_required
 from app.tasks import analyze_channel
+from app.analysis import generate_wordcloud
 from datetime import datetime, timedelta
 import subprocess
+import csv
+import io
 
 main = Blueprint('main', __name__)
 
@@ -86,6 +89,51 @@ def api_channel_logs(channel_id):
             seen_messages[msg] = log
 
     return jsonify(logs)
+
+@main.route('/api/wordcloud/<int:channel_id>')
+@login_required
+def api_wordcloud(channel_id):
+    # Get last 1000 messages
+    messages = ChatMessage.query.filter_by(channel_id=channel_id).order_by(ChatMessage.timestamp.desc()).limit(1000).all()
+    img_io = generate_wordcloud(messages)
+    if not img_io:
+        # Return empty 1x1 png or 404
+        return "No data", 404
+
+    return send_file(img_io, mimetype='image/png')
+
+@main.route('/export/chat/<int:channel_id>')
+@login_required
+def export_chat(channel_id):
+    channel = Channel.query.get_or_404(channel_id)
+    # Get last 10k messages
+    messages = ChatMessage.query.filter_by(channel_id=channel_id).order_by(ChatMessage.timestamp.desc()).limit(10000).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Timestamp', 'Username', 'Message', 'Badges'])
+
+    for m in messages:
+        writer.writerow([m.timestamp.isoformat(), m.username, m.message, m.badges])
+
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-disposition": f"attachment; filename=chat_{channel.name}.csv"}
+    )
+
+@main.route('/api/history/<int:channel_id>')
+@login_required
+def api_history(channel_id):
+    # Last 7 days scores
+    since = datetime.utcnow() - timedelta(days=7)
+    analyses = AnalysisResult.query.filter_by(channel_id=channel_id).filter(AnalysisResult.timestamp >= since).order_by(AnalysisResult.timestamp.asc()).all()
+
+    data = {
+        'labels': [a.timestamp.strftime('%Y-%m-%d %H:%M') for a in analyses],
+        'scores': [a.bot_score for a in analyses]
+    }
+    return jsonify(data)
 
 @main.route('/add_channel', methods=['POST'])
 @login_required
