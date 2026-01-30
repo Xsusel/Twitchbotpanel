@@ -10,7 +10,12 @@ sys.path.append(os.getcwd())
 from twitchio.ext import commands
 from app import create_app
 from app.models import db, Channel, ChatMessage, StreamStats
+from app.tasks import analyze_channel
 from config import Config
+from flask_socketio import SocketIO
+
+# External SocketIO to emit events to Flask
+socketio = SocketIO(message_queue=Config.CELERY_BROKER_URL)
 
 class Bot(commands.Bot):
     def __init__(self):
@@ -63,6 +68,19 @@ class Bot(commands.Bot):
                     )
                     db.session.add(new_msg)
                     db.session.commit()
+
+                    # Emit real-time event
+                    try:
+                        socketio.emit('new_message', {
+                            'channel_id': channel.id,
+                            'username': username,
+                            'message': content,
+                            'timestamp': timestamp.strftime('%H:%M:%S'),
+                            'badges': badges
+                        })
+                    except Exception as e:
+                        print(f"SocketIO emit error: {e}")
+
         except Exception as e:
             print(f"Error saving message: {e}")
 
@@ -126,6 +144,10 @@ class Bot(commands.Bot):
                         chatter_count=chatter_count
                     )
                     db.session.add(stats)
+
+                    # Trigger analysis
+                    analyze_channel.delay(c.id)
+
                 except Exception as e:
                     print(f"Error processing stats for {name}: {e}")
 

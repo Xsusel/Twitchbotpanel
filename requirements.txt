@@ -15,3 +15,7 @@ scikit-learn
 pandas
 wordcloud
 matplotlib
+networkx
+flask-socketio
+eventlet
+weasyprint

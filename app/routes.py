@@ -3,6 +3,8 @@ from app.models import db, Channel, ChatMessage, StreamStats, AnalysisResult
 from app.auth import login_required
 from app.tasks import analyze_channel
 from app.analysis import generate_wordcloud
+from app.network_analysis import generate_user_network
+from app.reports import generate_pdf_report
 from datetime import datetime, timedelta
 import subprocess
 import csv
@@ -122,6 +124,26 @@ def export_chat(channel_id):
         headers={"Content-disposition": f"attachment; filename=chat_{channel.name}.csv"}
     )
 
+@main.route('/export/pdf/<int:channel_id>')
+@login_required
+def export_pdf(channel_id):
+    channel = Channel.query.get_or_404(channel_id)
+    latest_analysis = AnalysisResult.query.filter_by(channel_id=channel_id).order_by(AnalysisResult.timestamp.desc()).first()
+    latest_stats = StreamStats.query.filter_by(channel_id=channel_id).order_by(StreamStats.timestamp.desc()).first()
+    messages = ChatMessage.query.filter_by(channel_id=channel_id).order_by(ChatMessage.timestamp.desc()).limit(100).all()
+
+    if not latest_analysis or not latest_stats:
+        flash("Not enough data for report.")
+        return redirect(url_for('main.channel_detail', channel_id=channel_id))
+
+    pdf_bytes = generate_pdf_report(channel, latest_stats, latest_analysis, messages)
+
+    return Response(
+        pdf_bytes,
+        mimetype='application/pdf',
+        headers={"Content-disposition": f"attachment; filename=report_{channel.name}.pdf"}
+    )
+
 @main.route('/api/history/<int:channel_id>')
 @login_required
 def api_history(channel_id):
@@ -134,6 +156,14 @@ def api_history(channel_id):
         'scores': [a.bot_score for a in analyses]
     }
     return jsonify(data)
+
+@main.route('/api/network/<int:channel_id>')
+@login_required
+def api_network(channel_id):
+    # Analyze last 500 messages for network graph
+    messages = ChatMessage.query.filter_by(channel_id=channel_id).order_by(ChatMessage.timestamp.desc()).limit(500).all()
+    graph_data = generate_user_network(messages)
+    return jsonify(graph_data)
 
 @main.route('/add_channel', methods=['POST'])
 @login_required

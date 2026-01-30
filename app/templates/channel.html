@@ -46,6 +46,13 @@
         </div>
     </div>
 
+    <!-- Network Graph -->
+    <div class="card full-width" style="margin-top: 20px;">
+        <h3>User Interaction Network</h3>
+        <p>Nodes: Users. Links: Mentions/Interactions. <span style="color:red">Red links</span> indicate identical messages (potential bot farm).</p>
+        <div id="networkGraph" style="width: 100%; height: 500px; background: #000; border-radius: 8px; overflow: hidden;"></div>
+    </div>
+
     <!-- Word Cloud -->
     <div class="card full-width" style="margin-top: 20px; text-align: center;">
         <h3>Chat Word Cloud</h3>
@@ -73,12 +80,53 @@
         <h3>Actions</h3>
         <a href="{{ url_for('main.trigger_analysis', channel_id=channel.id) }}" class="btn">Run Manual Analysis (Celery)</a>
         <a href="{{ url_for('main.export_chat', channel_id=channel.id) }}" class="btn" style="background-color: #28a745;">Export CSV</a>
+        <a href="{{ url_for('main.export_pdf', channel_id=channel.id) }}" class="btn" style="background-color: #dc3545;">Download PDF Report</a>
         <a href="{{ url_for('main.index') }}" class="btn" style="background-color: #666;">Back to Dashboard</a>
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 <script>
     const channelId = {{ channel.id }};
+    const socket = io();
+
+    socket.on('connect', function() {
+        console.log('Connected to WebSocket');
+    });
+
+    socket.on('new_message', function(msg) {
+        if (msg.channel_id === channelId) {
+            const logContainer = document.getElementById('chatLogs');
+            const div = document.createElement('div');
+            div.className = 'log-entry';
+
+            // Re-apply simple suspicious logic or wait for full analysis?
+            // For real-time, we just show it.
+
+            const timestampSpan = document.createElement('span');
+            timestampSpan.style.color = '#888';
+            timestampSpan.textContent = `[${msg.timestamp}] `;
+
+            const userStrong = document.createElement('strong');
+            userStrong.textContent = msg.username;
+
+            const messageText = document.createTextNode(`: ${msg.message}`);
+
+            div.appendChild(timestampSpan);
+            div.appendChild(userStrong);
+            div.appendChild(messageText);
+
+            logContainer.insertBefore(div, logContainer.firstChild);
+
+            // Limit to 100 in DOM
+            if (logContainer.children.length > 100) {
+                logContainer.removeChild(logContainer.lastChild);
+            }
+        }
+    });
+
     const ctx = document.getElementById('ratioChart').getContext('2d');
     const ctxLang = document.getElementById('langChart').getContext('2d');
     const ctxHist = document.getElementById('historyChart').getContext('2d');
@@ -317,16 +365,109 @@
         }
     }
 
+    async function fetchNetwork() {
+        try {
+            const response = await fetch(`/api/network/${channelId}`);
+            const data = await response.json();
+
+            const width = document.getElementById('networkGraph').clientWidth;
+            const height = 500;
+
+            // Clear previous
+            d3.select("#networkGraph").selectAll("*").remove();
+
+            if (data.nodes.length === 0) {
+                 d3.select("#networkGraph").append("div")
+                    .style("color", "white")
+                    .style("padding", "20px")
+                    .text("No interaction data yet.");
+                 return;
+            }
+
+            const svg = d3.select("#networkGraph").append("svg")
+                .attr("width", width)
+                .attr("height", height);
+
+            const simulation = d3.forceSimulation(data.nodes)
+                .force("link", d3.forceLink(data.links).id(d => d.id).distance(100))
+                .force("charge", d3.forceManyBody().strength(-200))
+                .force("center", d3.forceCenter(width / 2, height / 2));
+
+            const link = svg.append("g")
+                .attr("stroke", "#999")
+                .attr("stroke-opacity", 0.6)
+                .selectAll("line")
+                .data(data.links)
+                .join("line")
+                .attr("stroke", d => d.value > 1 ? "red" : "#999")
+                .attr("stroke-width", d => Math.sqrt(d.value));
+
+            const node = svg.append("g")
+                .attr("stroke", "#fff")
+                .attr("stroke-width", 1.5)
+                .selectAll("circle")
+                .data(data.nodes)
+                .join("circle")
+                .attr("r", 5)
+                .attr("fill", d => d.group === 1 ? "#0053f1" : "#ff0000")
+                .call(drag(simulation));
+
+            node.append("title")
+                .text(d => d.id);
+
+            simulation.on("tick", () => {
+                link
+                    .attr("x1", d => d.source.x)
+                    .attr("y1", d => d.source.y)
+                    .attr("x2", d => d.target.x)
+                    .attr("y2", d => d.target.y);
+
+                node
+                    .attr("cx", d => d.x)
+                    .attr("cy", d => d.y);
+            });
+
+            function drag(simulation) {
+                function dragstarted(event) {
+                    if (!event.active) simulation.alphaTarget(0.3).restart();
+                    event.subject.fx = event.subject.x;
+                    event.subject.fy = event.subject.y;
+                }
+
+                function dragged(event) {
+                    event.subject.fx = event.x;
+                    event.subject.fy = event.y;
+                }
+
+                function dragended(event) {
+                    if (!event.active) simulation.alphaTarget(0);
+                    event.subject.fx = null;
+                    event.subject.fy = null;
+                }
+
+                return d3.drag()
+                    .on("start", dragstarted)
+                    .on("drag", dragged)
+                    .on("end", dragended);
+            }
+
+        } catch (error) {
+            console.error('Error fetching network:', error);
+        }
+    }
+
     // Initial load
     fetchStats();
     fetchLogs();
     fetchAnalysis();
     fetchHistory();
+    fetchNetwork();
 
     // Refresh every 30 seconds
     setInterval(fetchStats, 30000);
     setInterval(fetchLogs, 30000);
     setInterval(fetchAnalysis, 30000);
     setInterval(fetchHistory, 60000);
+    setInterval(fetchNetwork, 60000); // Heavy, so less frequent
 </script>
 {% endblock %}

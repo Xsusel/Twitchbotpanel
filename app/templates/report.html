@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>XSUS Sentinel Report - {{ channel.name }}</title>
+    <style>
+        body { font-family: sans-serif; }
+        h1, h2, h3 { color: #0053f1; }
+        .section { margin-bottom: 20px; border-bottom: 1px solid #ccc; padding-bottom: 10px; }
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h1>XSUS Sentinel Report</h1>
+    <h2>Channel: {{ channel.name }}</h2>
+    <p>Generated at: {{ analysis.timestamp }}</p>
+
+    <div class="section">
+        <h3>Summary</h3>
+        <p><strong>Bot Score:</strong> {{ analysis.bot_score }}%</p>
+        <p><strong>Current Viewers:</strong> {{ stats.viewer_count }}</p>
+        <p><strong>Current Chatters:</strong> {{ stats.chatter_count }}</p>
+    </div>
+
+    <div class="section">
+        <h3>Advanced Analytics</h3>
+        <ul>
+            <li><strong>Sentiment Polarity:</strong> {{ analysis.details.get('sentiment', {}).get('polarity', 'N/A') }}</li>
+            <li><strong>Account Age (Avg Days):</strong> {{ analysis.details.get('account_age', {}).get('avg_age_days', 'N/A') }}</li>
+            <li><strong>Cross-Channel Overlap:</strong> {{ analysis.details.get('hive_mind', {}).get('cross_channel_users', 'N/A') }} users</li>
+            <li><strong>ML Anomaly Score:</strong> {{ analysis.details.get('ml_anomaly_score', 'N/A') }}%</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <h3>Recent Chat Log (Last 50)</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>User</th>
+                    <th>Message</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for msg in messages[:50] %}
+                <tr>
+                    <td>{{ msg.timestamp.strftime('%H:%M:%S') }}</td>
+                    <td>{{ msg.username }}</td>
+                    <td>{{ msg.message }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>
