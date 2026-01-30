@@ -15,15 +15,34 @@ class Channel(db.Model):
     messages = db.relationship('ChatMessage', backref='channel', lazy='dynamic', cascade="all, delete-orphan")
     stats = db.relationship('StreamStats', backref='channel', lazy='dynamic', cascade="all, delete-orphan")
     analyses = db.relationship('AnalysisResult', backref='channel', lazy='dynamic', cascade="all, delete-orphan")
+    streams = db.relationship('Stream', backref='channel', lazy='dynamic', cascade="all, delete-orphan")
 
     def __repr__(self):
         return f'<Channel {self.name}>'
+
+class Stream(db.Model):
+    __tablename__ = 'streams'
+
+    id = db.Column(db.Integer, primary_key=True)
+    channel_id = db.Column(db.Integer, db.ForeignKey('channels.id'), nullable=False)
+    title = db.Column(db.String(255))
+    game_name = db.Column(db.String(128))
+    started_at = db.Column(db.DateTime, default=datetime.utcnow)
+    ended_at = db.Column(db.DateTime, nullable=True)
+    is_live = db.Column(db.Boolean, default=True)
+
+    messages = db.relationship('ChatMessage', backref='stream', lazy='dynamic')
+    stats = db.relationship('StreamStats', backref='stream', lazy='dynamic')
+
+    def __repr__(self):
+        return f'<Stream {self.id} {self.channel_id}>'
 
 class ChatMessage(db.Model):
     __tablename__ = 'chat_messages'
 
     id = db.Column(db.Integer, primary_key=True)
     channel_id = db.Column(db.Integer, db.ForeignKey('channels.id'), nullable=False)
+    stream_id = db.Column(db.Integer, db.ForeignKey('streams.id'), nullable=True)
     username = db.Column(db.String(128), nullable=False)
     message = db.Column(db.Text, nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
@@ -38,6 +57,7 @@ class StreamStats(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     channel_id = db.Column(db.Integer, db.ForeignKey('channels.id'), nullable=False)
+    stream_id = db.Column(db.Integer, db.ForeignKey('streams.id'), nullable=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     viewer_count = db.Column(db.Integer, default=0)
     chatter_count = db.Column(db.Integer, default=0)
@@ -50,6 +70,7 @@ class AnalysisResult(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     channel_id = db.Column(db.Integer, db.ForeignKey('channels.id'), nullable=False)
+    stream_id = db.Column(db.Integer, db.ForeignKey('streams.id'), nullable=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     bot_score = db.Column(db.Float, default=0.0)
     details = db.Column(JSONB, default={}) # Store metrics details (entropy, ratio, etc.)

@@ -1,5 +1,5 @@
 from app import celery, db
-from app.models import Channel, ChatMessage, StreamStats, AnalysisResult
+from app.models import Channel, ChatMessage, StreamStats, AnalysisResult, Stream
 from app.analysis import calculate_bot_score, get_language_distribution, analyze_sentiment
 from datetime import datetime, timedelta
 import requests
@@ -104,11 +104,44 @@ def send_discord_alert(channel, score, viewers, age_stats):
         print(f"Discord webhook error: {e}")
 
 @celery.task
+def cleanup_old_data():
+    """Deletes data older than 90 days."""
+    try:
+        cutoff = datetime.utcnow() - timedelta(days=90)
+        print(f"Running cleanup task. Deleting data older than {cutoff}...")
+
+        # Delete old ChatMessages
+        deleted_msgs = ChatMessage.query.filter(ChatMessage.timestamp < cutoff).delete()
+        print(f"Deleted {deleted_msgs} old messages.")
+
+        # Delete old StreamStats
+        deleted_stats = StreamStats.query.filter(StreamStats.timestamp < cutoff).delete()
+        print(f"Deleted {deleted_stats} old stats.")
+
+        # Delete old AnalysisResults
+        deleted_analyses = AnalysisResult.query.filter(AnalysisResult.timestamp < cutoff).delete()
+        print(f"Deleted {deleted_analyses} old analysis results.")
+
+        # Delete old Streams (that ended before cutoff)
+        deleted_streams = Stream.query.filter(Stream.ended_at < cutoff).delete()
+        print(f"Deleted {deleted_streams} old streams.")
+
+        db.session.commit()
+        print("Cleanup complete.")
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error during data cleanup: {e}")
+
+@celery.task
 def analyze_channel(channel_id):
     try:
         channel = Channel.query.get(channel_id)
         if not channel:
             return
+
+        # Get active stream for this channel
+        stream = Stream.query.filter_by(channel_id=channel_id, is_live=True).order_by(Stream.started_at.desc()).first()
+        stream_id = stream.id if stream else None
 
         # Get latest stats (within last 10 mins)
         stats = StreamStats.query.filter_by(channel_id=channel_id).order_by(StreamStats.timestamp.desc()).first()
@@ -175,6 +208,7 @@ def analyze_channel(channel_id):
         # Save result
         result = AnalysisResult(
             channel_id=channel_id,
+            stream_id=stream_id,
             bot_score=score,
             details={
                 "viewer_count": stats.viewer_count,
