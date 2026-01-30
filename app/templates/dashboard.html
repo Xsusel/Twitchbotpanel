@@ -3,7 +3,7 @@
 {% block content %}
 <div class="row mb-4">
     <div class="col-12">
-        <h2 class="text-primary"><i class="fas fa-tachometer-alt"></i> Dashboard</h2>
+        <h2 class="text-primary"><i class="fas fa-tachometer-alt"></i> Panel Główny</h2>
     </div>
 </div>
 
@@ -11,7 +11,7 @@
     <div class="col-md-8">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <span><i class="fas fa-list"></i> Monitored Channels</span>
+                <span><i class="fas fa-list"></i> Monitorowane Kanały</span>
                 <span class="badge bg-secondary">{{ channels|length }}</span>
             </div>
             <div class="card-body">
@@ -19,11 +19,11 @@
                     <table id="channelsTable" class="table table-dark table-hover table-striped">
                         <thead>
                             <tr>
-                                <th>Channel</th>
+                                <th>Kanał</th>
                                 <th>Status</th>
-                                <th>Current Activity</th>
-                                <th>Bot Score</th>
-                                <th>Actions</th>
+                                <th>Aktywność</th>
+                                <th>Wskaźnik Bota</th>
+                                <th>Akcje</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -36,14 +36,14 @@
                                 </td>
                                 <td>
                                     {% if channel.is_active %}
-                                        <span class="badge bg-success">Active</span>
+                                        <span class="badge bg-success">Aktywny</span>
                                     {% else %}
-                                        <span class="badge bg-danger">Inactive</span>
+                                        <span class="badge bg-danger">Nieaktywny</span>
                                     {% endif %}
                                 </td>
                                 <td>
                                     {% if channel.is_live %}
-                                        <span class="badge bg-danger animate-pulse">LIVE</span>
+                                        <span class="badge bg-danger animate-pulse">NA ŻYWO</span>
                                         <small class="d-block text-muted">{{ channel.game_name }}</small>
                                     {% else %}
                                         <span class="badge bg-secondary">Offline</span>
@@ -61,10 +61,10 @@
                                 </td>
                                 <td>
                                     <div class="btn-group btn-group-sm">
-                                        <a href="{{ url_for('main.channel_detail', channel_id=channel.id) }}" class="btn btn-outline-info" title="Details">
+                                        <a href="{{ url_for('main.channel_detail', channel_id=channel.id) }}" class="btn btn-outline-info" title="Szczegóły">
                                             <i class="fas fa-chart-line"></i>
                                         </a>
-                                        <a href="{{ url_for('main.remove_channel', channel_id=channel.id) }}" class="btn btn-outline-danger" onclick="return confirm('Are you sure?')" title="Remove">
+                                        <a href="{{ url_for('main.remove_channel', channel_id=channel.id) }}" class="btn btn-outline-danger" onclick="return confirm('Jesteś pewien?')" title="Usuń">
                                             <i class="fas fa-trash"></i>
                                         </a>
                                     </div>
@@ -80,44 +80,44 @@
 
     <div class="col-md-4">
         <div class="card mb-4">
-            <div class="card-header"><i class="fas fa-plus"></i> Add Channel</div>
+            <div class="card-header"><i class="fas fa-plus"></i> Dodaj Kanał</div>
             <div class="card-body">
                 <form action="{{ url_for('main.add_channel') }}" method="POST" class="d-flex gap-2">
-                    <input type="text" name="channel_name" class="form-control" placeholder="Channel Name (e.g. ninja)" required>
-                    <button type="submit" class="btn btn-success">Add</button>
+                    <input type="text" name="channel_name" class="form-control" placeholder="Nazwa Kanału (np. ninja)" required>
+                    <button type="submit" class="btn btn-success">Dodaj</button>
                 </form>
             </div>
         </div>
 
         <div class="card mb-4">
-            <div class="card-header"><i class="fas fa-bell"></i> System Status</div>
+            <div class="card-header"><i class="fas fa-bell"></i> Status Systemu</div>
             <div class="card-body">
                 <ul class="list-group list-group-flush bg-transparent">
                     <li class="list-group-item bg-transparent text-white d-flex justify-content-between">
-                        <span>Discord Webhook</span>
+                        <span>Webhook Discord</span>
                         {% if config.DISCORD_WEBHOOK_URL %}
-                            <span class="badge bg-success">Configured</span>
+                            <span class="badge bg-success">Skonfigurowany</span>
                         {% else %}
-                            <span class="badge bg-warning text-dark">Missing</span>
+                            <span class="badge bg-warning text-dark">Brak</span>
                         {% endif %}
                     </li>
                     <li class="list-group-item bg-transparent text-white d-flex justify-content-between">
-                        <span>Database</span>
-                        <span class="badge bg-success">Connected</span>
+                        <span>Baza Danych</span>
+                        <span class="badge bg-success">Połączono</span>
                     </li>
                 </ul>
             </div>
         </div>
 
         <div class="card">
-            <div class="card-header"><i class="fas fa-cogs"></i> System Control</div>
+            <div class="card-header"><i class="fas fa-cogs"></i> Kontrola Systemu</div>
             <div class="card-body">
                 <form action="{{ url_for('main.update_app') }}" method="POST">
                     <button type="submit" class="btn btn-outline-light w-100 mb-2">
-                        <i class="fas fa-sync-alt"></i> Check for Updates & Migrate
+                        <i class="fas fa-sync-alt"></i> Sprawdź Aktualizacje i Migruj
                     </button>
                 </form>
-                <small class="text-muted">This will run `git pull` and `migrate_db.py`.</small>
+                <small class="text-muted">To uruchomi `git pull` oraz `migrate_db.py`.</small>
             </div>
         </div>
     </div>
@@ -131,7 +131,18 @@
             "order": [[ 3, "desc" ]], // Sort by Bot Score desc
             "pageLength": 10,
             "language": {
-                "search": "Filter channels:"
+                "search": "Filtruj kanały:",
+                "lengthMenu": "Pokaż _MENU_ wpisów",
+                "info": "Wyświetlono _START_ do _END_ z _TOTAL_ wpisów",
+                "infoEmpty": "Brak danych",
+                "infoFiltered": "(przefiltrowano z _MAX_ wpisów)",
+                "zeroRecords": "Nie znaleziono pasujących wpisów",
+                "paginate": {
+                    "first": "Pierwsza",
+                    "last": "Ostatnia",
+                    "next": "Następna",
+                    "previous": "Poprzednia"
+                }
             }
         });
     });
