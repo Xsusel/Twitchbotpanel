@@ -1,0 +1,15 @@
+[Unit]
+Description=XSUS Sentinel Twitch Bot
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/xsus_sentinel
+Environment="PATH=/opt/xsus_sentinel/venv/bin:/usr/local/bin:/usr/bin:/bin"
+EnvironmentFile=/opt/xsus_sentinel/.env
+ExecStart=/opt/xsus_sentinel/venv/bin/python3 bot/bot.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

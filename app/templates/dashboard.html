@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2 style="margin-top: 20px; color: var(--primary-blue);">Dashboard</h2>
+
+        <div class="card">
+            <h3>Monitored Channels</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Channel</th>
+                        <th>Status</th>
+                        <th>Bot Score</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for channel in channels %}
+                    <tr>
+                        <td><a href="{{ url_for('main.channel_detail', channel_id=channel.id) }}" style="color: white; font-weight: bold;">{{ channel.name }}</a></td>
+                        <td>
+                            {% if channel.is_active %}
+                                <span class="status-indicator status-good"></span> Active
+                            {% else %}
+                                <span class="status-indicator status-bad"></span> Inactive
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="progress-bar" style="width: 100px; background: #444; height: 10px; border-radius: 5px; display: inline-block; overflow: hidden;">
+                                <div style="width: {{ channel.score }}%; background: {% if channel.score > 70 %}#ff0000{% elif channel.score > 30 %}#ffff00{% else %}#00ff00{% endif %}; height: 100%;"></div>
+                            </div>
+                            {{ channel.score }}%
+                        </td>
+                        <td>
+                            <a href="{{ url_for('main.channel_detail', channel_id=channel.id) }}" class="btn" style="padding: 5px 10px; font-size: 0.8em;">Details</a>
+                            <a href="{{ url_for('main.remove_channel', channel_id=channel.id) }}" class="btn" style="background-color: red; padding: 5px 10px; font-size: 0.8em;" onclick="return confirm('Are you sure?')">Remove</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h3>Add New Channel</h3>
+            <form action="{{ url_for('main.add_channel') }}" method="POST">
+                <input type="text" name="channel_name" placeholder="Channel Name (e.g. ninja)" required style="padding: 10px; width: 300px; background: #333; border: 1px solid #555; color: white;">
+                <button type="submit" class="btn">Add Channel</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h3>System Control</h3>
+            <form action="{{ url_for('main.update_app') }}" method="POST">
+                <button type="submit" class="btn" style="background-color: #666;">Check for Updates (git pull)</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

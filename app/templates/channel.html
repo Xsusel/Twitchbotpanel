@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h2>Channel Analysis: {{ channel.name }}</h2>
+
+    <div class="grid-container">
+        <!-- Main Stats Card -->
+        <div class="card full-width">
+            <h3>Viewer vs Chatter Ratio (Last 24h)</h3>
+            <div class="chart-container-lg">
+                <canvas id="ratioChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Language Distribution -->
+        <div class="card">
+            <h3>Language Distribution</h3>
+            <div class="chart-container">
+                <canvas id="langChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Account Age Metrics -->
+        <div class="card">
+            <h3>Account Analysis</h3>
+            <div id="accountAgeData">
+                <p>Loading...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chat Logs -->
+    <div class="card full-width" style="margin-top: 20px;">
+        <h3>Live Chat Logs (Latest 100)</h3>
+        <p>Suspicious messages (repetition, bot patterns) are <span class="log-suspicious">highlighted</span>.</p>
+        <div class="log-container" id="chatLogs">
+            <!-- Logs will be inserted here -->
+        </div>
+    </div>
+
+    <div class="card full-width" style="margin-top: 20px;">
+        <h3>Actions</h3>
+        <a href="{{ url_for('main.trigger_analysis', channel_id=channel.id) }}" class="btn">Run Manual Analysis (Celery)</a>
+        <a href="{{ url_for('main.index') }}" class="btn" style="background-color: #666;">Back to Dashboard</a>
+    </div>
+</div>
+
+<script>
+    const channelId = {{ channel.id }};
+    const ctx = document.getElementById('ratioChart').getContext('2d');
+    const ctxLang = document.getElementById('langChart').getContext('2d');
+    let ratioChart;
+    let langChart;
+
+    async function fetchStats() {
+        try {
+            const response = await fetch(`/api/stats/${channelId}`);
+            const data = await response.json();
+
+            if (ratioChart) {
+                ratioChart.data.labels = data.labels;
+                ratioChart.data.datasets[0].data = data.viewers;
+                ratioChart.data.datasets[1].data = data.chatters;
+                ratioChart.update();
+            } else {
+                ratioChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.labels,
+                        datasets: [{
+                            label: 'Viewers',
+                            data: data.viewers,
+                            borderColor: 'rgb(75, 192, 192)',
+                            tension: 0.1
+                        }, {
+                            label: 'Chatters',
+                            data: data.chatters,
+                            borderColor: 'rgb(255, 99, 132)',
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('Error fetching stats:', error);
+        }
+    }
+
+    async function fetchAnalysis() {
+        try {
+            const response = await fetch(`/api/analysis/${channelId}`);
+            const data = await response.json();
+
+            // Languages
+            if (data.languages) {
+                const labels = Object.keys(data.languages);
+                const values = Object.values(data.languages);
+
+                if (langChart) {
+                    langChart.data.labels = labels;
+                    langChart.data.datasets[0].data = values;
+                    langChart.update();
+                } else {
+                    langChart = new Chart(ctxLang, {
+                        type: 'pie',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                data: values,
+                                backgroundColor: [
+                                    '#FF6384',
+                                    '#36A2EB',
+                                    '#FFCE56',
+                                    '#4BC0C0',
+                                    '#9966FF'
+                                ]
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false
+                        }
+                    });
+                }
+            }
+
+            // Account Age
+            const ageDiv = document.getElementById('accountAgeData');
+            if (data.account_age) {
+                ageDiv.innerHTML = `
+                    <div class="stat-box">
+                        <h4>Avg Account Age</h4>
+                        <span class="stat-value">${data.account_age.avg_age_days} days</span>
+                    </div>
+                    <div class="stat-box">
+                        <h4>New Accounts (<30d)</h4>
+                        <span class="stat-value ${data.account_age.percent_new > 50 ? 'bad' : 'good'}">${data.account_age.percent_new}%</span>
+                    </div>
+                    <p style="font-size:0.8em; margin-top:10px;">Sample size: ${data.account_age.sample_size}</p>
+                `;
+            } else {
+                ageDiv.innerHTML = '<p>No account data yet.</p>';
+            }
+
+        } catch (error) {
+            console.error('Error fetching analysis:', error);
+        }
+    }
+
+    async function fetchLogs() {
+        try {
+            const response = await fetch(`/api/logs/${channelId}?limit=100`);
+            const logs = await response.json();
+
+            const logContainer = document.getElementById('chatLogs');
+            logContainer.innerHTML = '';
+
+            logs.forEach(log => {
+                const div = document.createElement('div');
+                div.className = 'log-entry';
+
+                if (log.suspicious) {
+                    div.classList.add('log-suspicious');
+                }
+
+                const timestampSpan = document.createElement('span');
+                timestampSpan.style.color = '#888';
+                timestampSpan.textContent = `[${log.timestamp}] `;
+
+                const userStrong = document.createElement('strong');
+                userStrong.textContent = log.username;
+
+                const messageText = document.createTextNode(`: ${log.message}`);
+
+                div.appendChild(timestampSpan);
+                div.appendChild(userStrong);
+                div.appendChild(messageText);
+
+                logContainer.appendChild(div);
+            });
+        } catch (error) {
+            console.error('Error fetching logs:', error);
+        }
+    }
+
+    // Initial load
+    fetchStats();
+    fetchLogs();
+    fetchAnalysis();
+
+    // Refresh every 30 seconds
+    setInterval(fetchStats, 30000);
+    setInterval(fetchLogs, 30000);
+    setInterval(fetchAnalysis, 30000);
+</script>
+{% endblock %}

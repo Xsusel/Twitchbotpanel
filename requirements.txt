@@ -1,0 +1,12 @@
+flask
+twitchio
+sqlalchemy
+flask-sqlalchemy
+psycopg2-binary
+celery[redis]
+redis
+langdetect
+python-dotenv
+python-levenshtein
+gunicorn
+requests
