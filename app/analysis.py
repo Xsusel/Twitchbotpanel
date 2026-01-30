@@ -3,6 +3,9 @@ from langdetect import detect, LangDetectException
 import statistics
 from datetime import datetime
 from textblob import TextBlob
+from wordcloud import WordCloud
+import io
+import base64
 
 def calculate_ratio(viewer_count, chatter_count):
     if viewer_count == 0:

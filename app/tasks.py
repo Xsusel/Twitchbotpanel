@@ -6,9 +6,10 @@ import requests
 import json
 from config import Config
 from sqlalchemy import func
-from app.ml_engine import MLDetector
+from app.ml_engine import MLDetector, TopicModeler
 
 ml_detector = MLDetector()
+topic_modeler = TopicModeler()
 
 def get_twitch_users_info(usernames):
     if not usernames or not Config.TWITCH_CLIENT_ID or not Config.TWITCH_CLIENT_SECRET:
@@ -162,6 +163,9 @@ def analyze_channel(channel_id):
         if ml_score > 50:
             score += 10
 
+        # Topic Modeling
+        topics = topic_modeler.extract_topics(messages)
+
         score = min(score, 100.0)
 
         # Alerting
@@ -180,7 +184,8 @@ def analyze_channel(channel_id):
                 "account_age": age_stats,
                 "sentiment": sentiment,
                 "hive_mind": hive_mind_stats,
-                "ml_anomaly_score": ml_score
+                "ml_anomaly_score": ml_score,
+                "topics": topics
             }
         )
         db.session.add(result)

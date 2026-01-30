@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, jsonif
 from app.models import db, Channel, ChatMessage, StreamStats, AnalysisResult
 from app.auth import login_required
 from app.tasks import analyze_channel
-from app.analysis import generate_wordcloud
+from app.analysis import generate_wordcloud, analyze_sentiment
 from app.network_analysis import generate_user_network
 from app.reports import generate_pdf_report
 from datetime import datetime, timedelta
@@ -195,6 +195,35 @@ def trigger_analysis(channel_id):
     analyze_channel.delay(channel_id)
     flash('Analysis started.')
     return redirect(url_for('main.channel_detail', channel_id=channel_id))
+
+@main.route('/user/<username>')
+@login_required
+def user_profile(username):
+    # Fetch all messages from this user across all channels
+    messages = ChatMessage.query.filter_by(username=username).order_by(ChatMessage.timestamp.desc()).all()
+
+    if not messages:
+        flash(f'User {username} not found in database.')
+        return redirect(url_for('main.index'))
+
+    total_messages = len(messages)
+    channels_seen = set(m.channel_id for m in messages)
+
+    # Calculate sentiment
+    sentiment = analyze_sentiment(messages)
+
+    # Activity Heatmap (Messages per Hour of Day)
+    activity_data = [0] * 24
+    for m in messages:
+        activity_data[m.timestamp.hour] += 1
+
+    return render_template('user.html',
+                           username=username,
+                           total_messages=total_messages,
+                           channels_count=len(channels_seen),
+                           avg_sentiment=sentiment['polarity'],
+                           activity_data=activity_data,
+                           recent_messages=messages[:50])
 
 @main.route('/update', methods=['POST'])
 @login_required

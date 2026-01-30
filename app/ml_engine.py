@@ -60,3 +60,43 @@ class MLDetector:
         score = (len(anomaly_indices) / len(messages)) * 100
 
         return score, anomaly_indices
+
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.decomposition import LatentDirichletAllocation
+
+class TopicModeler:
+    def __init__(self, n_topics=3):
+        self.n_topics = n_topics
+        self.vectorizer = CountVectorizer(stop_words='english', max_features=1000)
+        self.lda = LatentDirichletAllocation(n_components=n_topics, random_state=42)
+
+    def extract_topics(self, messages):
+        """
+        Extracts topics from a list of messages.
+        Returns a list of topic strings (top words).
+        """
+        if not messages or len(messages) < 10:
+            return []
+
+        texts = [msg.message if hasattr(msg, 'message') else msg.get('message', '') for msg in messages]
+        # Remove empty strings
+        texts = [t for t in texts if t.strip()]
+
+        if not texts:
+            return []
+
+        try:
+            X = self.vectorizer.fit_transform(texts)
+            self.lda.fit(X)
+
+            feature_names = self.vectorizer.get_feature_names_out()
+            topics = []
+
+            for topic_idx, topic in enumerate(self.lda.components_):
+                top_features_ind = topic.argsort()[:-6:-1]
+                topic_words = [feature_names[i] for i in top_features_ind]
+                topics.append(" ".join(topic_words))
+
+            return topics
+        except ValueError:
+            return []
