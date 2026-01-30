@@ -3,6 +3,7 @@ from config import Config
 from app.models import db
 from celery import Celery, Task
 from flask_socketio import SocketIO
+from sqlalchemy import text, inspect
 
 def celery_init_app(app: Flask) -> Celery:
     class FlaskTask(Task):
@@ -19,11 +20,53 @@ def celery_init_app(app: Flask) -> Celery:
 celery = Celery(__name__)
 socketio = SocketIO()
 
+def check_and_migrate_db(app):
+    """Checks for missing tables/columns and updates the DB."""
+    with app.app_context():
+        try:
+            # 1. Create tables if not exist (via SQLAlchemy)
+            # This handles 'streams' if it's completely missing
+            db.create_all()
+
+            # 2. Check for missing columns (Migrations)
+            inspector = inspect(db.engine)
+            with db.engine.connect() as conn:
+                # Add stream_id to chat_messages
+                if "chat_messages" in inspector.get_table_names():
+                    cols = [c['name'] for c in inspector.get_columns("chat_messages")]
+                    if "stream_id" not in cols:
+                        print("Migrating: Adding stream_id to chat_messages")
+                        conn.execute(text("ALTER TABLE chat_messages ADD COLUMN stream_id INTEGER REFERENCES streams(id)"))
+                        conn.commit()
+
+                # Add stream_id to stream_stats
+                if "stream_stats" in inspector.get_table_names():
+                    cols = [c['name'] for c in inspector.get_columns("stream_stats")]
+                    if "stream_id" not in cols:
+                        print("Migrating: Adding stream_id to stream_stats")
+                        conn.execute(text("ALTER TABLE stream_stats ADD COLUMN stream_id INTEGER REFERENCES streams(id)"))
+                        conn.commit()
+
+                # Add stream_id to analysis_results
+                if "analysis_results" in inspector.get_table_names():
+                    cols = [c['name'] for c in inspector.get_columns("analysis_results")]
+                    if "stream_id" not in cols:
+                        print("Migrating: Adding stream_id to analysis_results")
+                        conn.execute(text("ALTER TABLE analysis_results ADD COLUMN stream_id INTEGER REFERENCES streams(id)"))
+                        conn.commit()
+
+            print("Database check/migration complete.")
+        except Exception as e:
+            print(f"Database migration error: {e}")
+
 def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
     db.init_app(app)
+
+    # Auto-migrate on startup
+    check_and_migrate_db(app)
 
     app.config.from_mapping(
         CELERY=dict(
