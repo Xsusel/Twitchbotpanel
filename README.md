@@ -9,7 +9,30 @@ Zaawansowany system analityczny do wykrywania view-bottingu na Twitchu. Monitoru
 *   **Baza Danych:** PostgreSQL
 *   **Background Tasks:** Redis + Celery
 
-## Instalacja (Debian)
+## Instalacja (Debian) - Automatyczna
+
+1. Pobierz repozytorium:
+```bash
+cd /opt
+git clone <URL_DO_REPOZYTORIUM> xsus_sentinel
+cd xsus_sentinel
+```
+
+2. Uruchom skrypt instalacyjny (jako root):
+```bash
+chmod +x setup.sh
+./setup.sh
+```
+
+3. Postępuj zgodnie z instrukcjami na ekranie. Skrypt poprosi o podanie:
+   - Twitch Client ID
+   - Twitch Client Secret
+   - Twitch IRC Token
+   - Discord Webhook (opcjonalnie)
+
+## Instalacja Ręczna (Opcjonalnie)
+
+Jeśli wolisz instalację ręczną, wykonaj poniższe kroki:
 
 ### 1. Wymagania Systemowe
 *   Debian 10/11/12
@@ -19,21 +42,7 @@ Zaawansowany system analityczny do wykrywania view-bottingu na Twitchu. Monitoru
 *   Nginx
 *   Git
 
-### 2. Pobranie Repozytorium
-```bash
-cd /opt
-git clone <URL_DO_REPOZYTORIUM> xsus_sentinel
-cd xsus_sentinel
-```
-
-### 3. Uprawnienia
-Zmień właściciela katalogu na użytkownika, który będzie uruchamiał aplikację (zwykle `www-data`):
-```bash
-chown -R www-data:www-data /opt/xsus_sentinel
-```
-*Uwaga: Dalsze kroki konfiguracji wykonuj jako użytkownik root lub z użyciem sudo, pamiętając o uprawnieniach do plików.*
-
-### 4. Konfiguracja Środowiska
+### 2. Konfiguracja Środowiska
 Utwórz wirtualne środowisko i zainstaluj zależności:
 ```bash
 python3 -m venv venv
@@ -41,7 +50,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 5. Konfiguracja Aplikacji
+### 3. Konfiguracja Aplikacji
 Skopiuj plik `.env.example` do `.env` i uzupełnij dane:
 ```bash
 cp .env.example .env
@@ -54,14 +63,14 @@ Upewnij się, że `DATABASE_URL` jest poprawny:
 
 Oraz wprowadź dane Twitch API (Client ID, Secret, IRC Token).
 
-### 6. Inicjalizacja Bazy Danych
+### 4. Inicjalizacja Bazy Danych
 Utwórz tabele w bazie danych:
 ```bash
 export FLASK_APP=app
 python3 init_db.py
 ```
 
-### 7. Konfiguracja Systemd
+### 5. Konfiguracja Systemd
 Skopiuj pliki usług do systemd:
 ```bash
 cp systemd/*.service /etc/systemd/system/
@@ -70,7 +79,7 @@ systemctl enable xsus-web xsus-bot xsus-celery
 systemctl start xsus-web xsus-bot xsus-celery
 ```
 
-### 7. Konfiguracja Nginx
+### 6. Konfiguracja Nginx
 Skopiuj konfigurację Nginx:
 ```bash
 cp nginx/xsus_sentinel.conf /etc/nginx/sites-available/
