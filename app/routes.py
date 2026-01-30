@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify, flash, send_file, Response
-from app.models import db, Channel, ChatMessage, StreamStats, AnalysisResult
+from app.models import db, Channel, ChatMessage, StreamStats, AnalysisResult, Stream
 from app.auth import login_required
 from app.tasks import analyze_channel
 from app.analysis import generate_wordcloud, analyze_sentiment
@@ -21,11 +21,18 @@ def index():
     for c in channels:
         latest_analysis = AnalysisResult.query.filter_by(channel_id=c.id).order_by(AnalysisResult.timestamp.desc()).first()
         score = latest_analysis.bot_score if latest_analysis else 0
+
+        # Get active stream info if live
+        active_stream = Stream.query.filter_by(channel_id=c.id, is_live=True).first()
+
         channel_data.append({
             'id': c.id,
             'name': c.name,
             'is_active': c.is_active,
-            'score': score
+            'score': score,
+            'is_live': active_stream is not None,
+            'game_name': active_stream.game_name if active_stream else "",
+            'title': active_stream.title if active_stream else ""
         })
     return render_template('dashboard.html', channels=channel_data)
 
@@ -35,12 +42,78 @@ def channel_detail(channel_id):
     channel = Channel.query.get_or_404(channel_id)
     return render_template('channel.html', channel=channel)
 
+@main.route('/api/streams/<int:channel_id>')
+@login_required
+def api_streams_list(channel_id):
+    # List all streams for this channel, newest first
+    streams = Stream.query.filter_by(channel_id=channel_id).order_by(Stream.started_at.desc()).limit(100).all()
+    data = []
+    for s in streams:
+        duration = ""
+        if s.ended_at:
+             delta = s.ended_at - s.started_at
+             duration = str(delta).split('.')[0]
+        elif s.is_live:
+             delta = datetime.utcnow() - s.started_at
+             duration = str(delta).split('.')[0] + " (Live)"
+
+        data.append({
+            'id': s.id,
+            'title': s.title,
+            'game_name': s.game_name,
+            'started_at': s.started_at.strftime('%Y-%m-%d %H:%M'),
+            'duration': duration,
+            'is_live': s.is_live
+        })
+    return jsonify(data)
+
+@main.route('/stream/<int:stream_id>')
+@login_required
+def stream_detail(stream_id):
+    stream = Stream.query.get_or_404(stream_id)
+    return render_template('stream_detail.html', stream=stream)
+
+@main.route('/api/stream/<int:stream_id>/stats')
+@login_required
+def api_stream_stats(stream_id):
+    stats = StreamStats.query.filter_by(stream_id=stream_id).order_by(StreamStats.timestamp.asc()).all()
+    data = {
+        'labels': [s.timestamp.strftime('%H:%M') for s in stats],
+        'viewers': [s.viewer_count for s in stats],
+        'chatters': [s.chatter_count for s in stats]
+    }
+    return jsonify(data)
+
+@main.route('/api/stream/<int:stream_id>/logs')
+@login_required
+def api_stream_logs(stream_id):
+    limit = request.args.get('limit', 1000, type=int)
+    messages = ChatMessage.query.filter_by(stream_id=stream_id).order_by(ChatMessage.timestamp.asc()).limit(limit).all()
+
+    logs = []
+    for m in messages:
+        logs.append({
+            'username': m.username,
+            'message': m.message,
+            'timestamp': m.timestamp.strftime('%H:%M:%S'),
+            'badges': m.badges
+        })
+    return jsonify(logs)
+
 @main.route('/api/stats/<int:channel_id>')
 @login_required
 def api_channel_stats(channel_id):
-    # Get stats for last 24 hours
-    since = datetime.utcnow() - timedelta(hours=24)
-    stats = StreamStats.query.filter_by(channel_id=channel_id).filter(StreamStats.timestamp >= since).order_by(StreamStats.timestamp.asc()).all()
+    # Get stats for last 24 hours OR current active stream
+    # If there is an active stream, prefer its stats?
+    # Current behavior: last 24h. Let's keep it but also support `?stream_id=` param
+
+    stream_id = request.args.get('stream_id', type=int)
+
+    if stream_id:
+        stats = StreamStats.query.filter_by(stream_id=stream_id).order_by(StreamStats.timestamp.asc()).all()
+    else:
+        since = datetime.utcnow() - timedelta(hours=24)
+        stats = StreamStats.query.filter_by(channel_id=channel_id).filter(StreamStats.timestamp >= since).order_by(StreamStats.timestamp.asc()).all()
 
     data = {
         'labels': [s.timestamp.strftime('%H:%M') for s in stats],
@@ -52,6 +125,7 @@ def api_channel_stats(channel_id):
 @main.route('/api/analysis/<int:channel_id>')
 @login_required
 def api_channel_analysis(channel_id):
+    # Support fetching analysis for a specific stream if needed, but usually we just want latest
     latest = AnalysisResult.query.filter_by(channel_id=channel_id).order_by(AnalysisResult.timestamp.desc()).first()
     if not latest:
         return jsonify({})
@@ -65,30 +139,30 @@ def api_channel_logs(channel_id):
     messages = ChatMessage.query.filter_by(channel_id=channel_id).order_by(ChatMessage.timestamp.desc()).limit(limit).all()
 
     logs = []
-    for m in messages:
-        is_suspicious = False
-        # Simple heuristic: if meta has flag or based on content
-        # For now, let's mark repetitive messages as suspicious here too or leave it to frontend?
-        # The plan says "Update app/routes.py: In /api/logs, add a suspicious flag".
-        # Let's verify duplicates in the fetched batch
+    seen_messages = {}
 
+    for m in messages:
         logs.append({
             'username': m.username,
             'message': m.message,
             'timestamp': m.timestamp.strftime('%H:%M:%S'),
             'badges': m.badges,
-            'suspicious': is_suspicious # Placeholder, will improve in next step
+            'suspicious': False
         })
 
-    # Simple post-processing for duplicates in the current batch
-    seen_messages = {}
+    # Mark duplicates
+    processed_logs = []
+    # Process in reverse (chronological) to find first instance?
+    # Actually for "Live" view, we just want to flag if it repeats often.
+    # Simple check:
+    content_counts = {}
     for log in logs:
         msg = log['message']
-        if msg in seen_messages:
+        content_counts[msg] = content_counts.get(msg, 0) + 1
+
+    for log in logs:
+        if content_counts[log['message']] > 3: # Arbitrary threshold
             log['suspicious'] = True
-            seen_messages[msg]['suspicious'] = True # Mark the first one too? Maybe not.
-        else:
-            seen_messages[msg] = log
 
     return jsonify(logs)
 
@@ -229,8 +303,19 @@ def user_profile(username):
 @login_required
 def update_app():
     try:
+        # Now calls update_code.sh which handles migration
+        # But we can't run the shell script from here directly if it requires root or passwordless sudo for restart
+        # The script `update_code.sh` checks for EUID 0.
+        # This route is likely just triggering git pull.
+        # Let's assume the user has configured this to work or it's a "soft" update.
+        # However, for a proper update including restarts, it's usually done via CLI.
+        # If this button just does git pull, that's what I'll leave it as, but I'll try to add the migration step here too.
+
         subprocess.run(["git", "pull"], check=True)
-        flash('Update initiated (git pull). Please restart services.')
+        # Attempt migration via python directly
+        subprocess.run(["python3", "migrate_db.py"], check=True)
+
+        flash('Update and migration initiated. Please restart services manually if needed.')
     except Exception as e:
         flash(f'Update failed: {e}')
     return redirect(url_for('main.index'))

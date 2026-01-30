@@ -1,67 +1,139 @@
 {% extends "base.html" %}
 
 {% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="text-primary"><i class="fas fa-tachometer-alt"></i> Dashboard</h2>
+    </div>
+</div>
+
 <div class="row">
-    <div class="col-md-12">
-        <h2 style="margin-top: 20px; color: var(--primary-blue);">Dashboard</h2>
-
+    <div class="col-md-8">
         <div class="card">
-            <h3>Monitored Channels</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Channel</th>
-                        <th>Status</th>
-                        <th>Bot Score</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for channel in channels %}
-                    <tr>
-                        <td><a href="{{ url_for('main.channel_detail', channel_id=channel.id) }}" style="color: white; font-weight: bold;">{{ channel.name }}</a></td>
-                        <td>
-                            {% if channel.is_active %}
-                                <span class="status-indicator status-good"></span> Active
-                            {% else %}
-                                <span class="status-indicator status-bad"></span> Inactive
-                            {% endif %}
-                        </td>
-                        <td>
-                            <div class="progress-bar" style="width: 100px; background: #444; height: 10px; border-radius: 5px; display: inline-block; overflow: hidden;">
-                                <div style="width: {{ channel.score }}%; background: {% if channel.score > 70 %}#ff0000{% elif channel.score > 30 %}#ffff00{% else %}#00ff00{% endif %}; height: 100%;"></div>
-                            </div>
-                            {{ channel.score }}%
-                        </td>
-                        <td>
-                            <a href="{{ url_for('main.channel_detail', channel_id=channel.id) }}" class="btn" style="padding: 5px 10px; font-size: 0.8em;">Details</a>
-                            <a href="{{ url_for('main.remove_channel', channel_id=channel.id) }}" class="btn" style="background-color: red; padding: 5px 10px; font-size: 0.8em;" onclick="return confirm('Are you sure?')">Remove</a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-list"></i> Monitored Channels</span>
+                <span class="badge bg-secondary">{{ channels|length }}</span>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table id="channelsTable" class="table table-dark table-hover table-striped">
+                        <thead>
+                            <tr>
+                                <th>Channel</th>
+                                <th>Status</th>
+                                <th>Current Activity</th>
+                                <th>Bot Score</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for channel in channels %}
+                            <tr>
+                                <td>
+                                    <a href="{{ url_for('main.channel_detail', channel_id=channel.id) }}" class="text-decoration-none text-white fw-bold">
+                                        {{ channel.name }}
+                                    </a>
+                                </td>
+                                <td>
+                                    {% if channel.is_active %}
+                                        <span class="badge bg-success">Active</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">Inactive</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if channel.is_live %}
+                                        <span class="badge bg-danger animate-pulse">LIVE</span>
+                                        <small class="d-block text-muted">{{ channel.game_name }}</small>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Offline</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="progress flex-grow-1 me-2" style="height: 6px;">
+                                            <div class="progress-bar {% if channel.score > 70 %}bg-danger{% elif channel.score > 30 %}bg-warning{% else %}bg-success{% endif %}"
+                                                 role="progressbar"
+                                                 style="width: {{ channel.score }}%"></div>
+                                        </div>
+                                        <span>{{ channel.score|round(1) }}%</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{{ url_for('main.channel_detail', channel_id=channel.id) }}" class="btn btn-outline-info" title="Details">
+                                            <i class="fas fa-chart-line"></i>
+                                        </a>
+                                        <a href="{{ url_for('main.remove_channel', channel_id=channel.id) }}" class="btn btn-outline-danger" onclick="return confirm('Are you sure?')" title="Remove">
+                                            <i class="fas fa-trash"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header"><i class="fas fa-plus"></i> Add Channel</div>
+            <div class="card-body">
+                <form action="{{ url_for('main.add_channel') }}" method="POST" class="d-flex gap-2">
+                    <input type="text" name="channel_name" class="form-control" placeholder="Channel Name (e.g. ninja)" required>
+                    <button type="submit" class="btn btn-success">Add</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header"><i class="fas fa-bell"></i> System Status</div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush bg-transparent">
+                    <li class="list-group-item bg-transparent text-white d-flex justify-content-between">
+                        <span>Discord Webhook</span>
+                        {% if config.DISCORD_WEBHOOK_URL %}
+                            <span class="badge bg-success">Configured</span>
+                        {% else %}
+                            <span class="badge bg-warning text-dark">Missing</span>
+                        {% endif %}
+                    </li>
+                    <li class="list-group-item bg-transparent text-white d-flex justify-content-between">
+                        <span>Database</span>
+                        <span class="badge bg-success">Connected</span>
+                    </li>
+                </ul>
+            </div>
         </div>
 
         <div class="card">
-            <h3>Add New Channel</h3>
-            <form action="{{ url_for('main.add_channel') }}" method="POST">
-                <input type="text" name="channel_name" placeholder="Channel Name (e.g. ninja)" required style="padding: 10px; width: 300px; background: #333; border: 1px solid #555; color: white;">
-                <button type="submit" class="btn">Add Channel</button>
-            </form>
-        </div>
-
-        <div class="card">
-            <h3>Alerts & Notifications</h3>
-            <p>Discord Webhook is {% if config.DISCORD_WEBHOOK_URL %} <span class="status-indicator status-good"></span> Configured {% else %} <span class="status-indicator status-warning"></span> Not Configured {% endif %}</p>
-        </div>
-
-        <div class="card">
-            <h3>System Control</h3>
-            <form action="{{ url_for('main.update_app') }}" method="POST">
-                <button type="submit" class="btn" style="background-color: #666;">Check for Updates (git pull)</button>
-            </form>
+            <div class="card-header"><i class="fas fa-cogs"></i> System Control</div>
+            <div class="card-body">
+                <form action="{{ url_for('main.update_app') }}" method="POST">
+                    <button type="submit" class="btn btn-outline-light w-100 mb-2">
+                        <i class="fas fa-sync-alt"></i> Check for Updates & Migrate
+                    </button>
+                </form>
+                <small class="text-muted">This will run `git pull` and `migrate_db.py`.</small>
+            </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function () {
+        $('#channelsTable').DataTable({
+            "order": [[ 3, "desc" ]], // Sort by Bot Score desc
+            "pageLength": 10,
+            "language": {
+                "search": "Filter channels:"
+            }
+        });
+    });
+</script>
 {% endblock %}

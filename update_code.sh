@@ -22,6 +22,9 @@ echo "[*] Updating Dependencies..."
 source venv/bin/activate
 pip install -r requirements.txt
 
+echo "[*] Running Database Migrations..."
+python3 migrate_db.py
+
 echo "[*] Restarting Services..."
 systemctl restart xsus-web xsus-bot xsus-celery
 
