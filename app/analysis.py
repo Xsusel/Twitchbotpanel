@@ -2,6 +2,7 @@ import Levenshtein
 from langdetect import detect, LangDetectException
 import statistics
 from datetime import datetime
+from textblob import TextBlob
 
 def calculate_ratio(viewer_count, chatter_count):
     if viewer_count == 0:
@@ -167,6 +168,33 @@ def analyze_global_repetition(messages):
             multi_user_msgs += len(users)
 
     return (multi_user_msgs / total_msgs) * 100 if total_msgs > 0 else 0.0
+
+def analyze_sentiment(messages):
+    """
+    Analyzes sentiment of messages.
+    Returns a dict with average polarity and subjectivity.
+    Polarity: -1.0 (Negative) to 1.0 (Positive)
+    Subjectivity: 0.0 (Objective) to 1.0 (Subjective)
+    """
+    if not messages:
+        return {'polarity': 0.0, 'subjectivity': 0.0}
+
+    polarities = []
+    subjectivities = []
+
+    for msg in messages:
+        text = msg.message if hasattr(msg, 'message') else msg.get('message', '')
+        blob = TextBlob(text)
+        polarities.append(blob.sentiment.polarity)
+        subjectivities.append(blob.sentiment.subjectivity)
+
+    avg_polarity = sum(polarities) / len(polarities)
+    avg_subjectivity = sum(subjectivities) / len(subjectivities)
+
+    return {
+        'polarity': round(avg_polarity, 2),
+        'subjectivity': round(avg_subjectivity, 2)
+    }
 
 def calculate_bot_score(viewer_count, chatter_count, messages):
     """

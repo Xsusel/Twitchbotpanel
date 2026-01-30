@@ -52,6 +52,11 @@
         </div>
 
         <div class="card">
+            <h3>Alerts & Notifications</h3>
+            <p>Discord Webhook is {% if config.DISCORD_WEBHOOK_URL %} <span class="status-indicator status-good"></span> Configured {% else %} <span class="status-indicator status-warning"></span> Not Configured {% endif %}</p>
+        </div>
+
+        <div class="card">
             <h3>System Control</h3>
             <form action="{{ url_for('main.update_app') }}" method="POST">
                 <button type="submit" class="btn" style="background-color: #666;">Check for Updates (git pull)</button>

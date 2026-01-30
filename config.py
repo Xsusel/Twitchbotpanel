@@ -16,3 +16,4 @@ class Config:
     CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND') or 'redis://localhost:6379/0'
 
     ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
+    DISCORD_WEBHOOK_URL = os.environ.get('DISCORD_WEBHOOK_URL')

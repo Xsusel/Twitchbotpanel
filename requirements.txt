@@ -10,3 +10,4 @@ python-dotenv
 python-levenshtein
 gunicorn
 requests
+textblob

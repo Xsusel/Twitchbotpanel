@@ -1,9 +1,11 @@
 from app import celery, db
 from app.models import Channel, ChatMessage, StreamStats, AnalysisResult
-from app.analysis import calculate_bot_score, get_language_distribution
+from app.analysis import calculate_bot_score, get_language_distribution, analyze_sentiment
 from datetime import datetime, timedelta
 import requests
+import json
 from config import Config
+from sqlalchemy import func
 
 def get_twitch_users_info(usernames):
     if not usernames or not Config.TWITCH_CLIENT_ID or not Config.TWITCH_CLIENT_SECRET:
@@ -77,6 +79,26 @@ def calculate_account_age_stats(users_data):
         "sample_size": len(users_data)
     }
 
+def send_discord_alert(channel, score, viewers, age_stats):
+    try:
+        data = {
+            "content": f"🚨 **XSUS Sentinel Alert** 🚨\nHigh Bot Probability Detected!",
+            "embeds": [{
+                "title": f"Channel: {channel.name}",
+                "color": 15158332, # Red
+                "fields": [
+                    {"name": "Bot Score", "value": f"{score}%", "inline": True},
+                    {"name": "Viewers", "value": str(viewers), "inline": True},
+                    {"name": "Avg Account Age", "value": f"{age_stats.get('avg_age_days', 'N/A')} days", "inline": True},
+                    {"name": "New Accounts (<30d)", "value": f"{age_stats.get('percent_new', 'N/A')}%", "inline": True}
+                ],
+                "timestamp": datetime.utcnow().isoformat()
+            }]
+        }
+        requests.post(Config.DISCORD_WEBHOOK_URL, json=data)
+    except Exception as e:
+        print(f"Discord webhook error: {e}")
+
 @celery.task
 def analyze_channel(channel_id):
     try:
@@ -96,10 +118,12 @@ def analyze_channel(channel_id):
 
         score = calculate_bot_score(stats.viewer_count, stats.chatter_count, messages)
         langs = get_language_distribution(messages)
+        sentiment = analyze_sentiment(messages)
 
         # Account Age Analysis (Sample top 50 unique users)
-        unique_users = list(set([m.username for m in messages]))[:50]
-        users_data = get_twitch_users_info(unique_users)
+        current_users = list(set([m.username for m in messages]))
+        unique_users_sample = current_users[:50]
+        users_data = get_twitch_users_info(unique_users_sample)
         age_stats = calculate_account_age_stats(users_data)
 
         # Adjust score based on age stats
@@ -108,7 +132,31 @@ def analyze_channel(channel_id):
         if age_stats.get("avg_age_days", 100) < 7: # Very fresh accounts on avg
             score += 20
 
+        # Hive Mind Check (Cross-Channel)
+        # Find users in this batch who have been active in OTHER channels recently
+        hive_mind_stats = {"cross_channel_users": 0, "total_tracked_users": len(current_users)}
+        if current_users:
+            try:
+                # Users active in last 10 mins in any channel
+                recent_active_users = db.session.query(ChatMessage.username)\
+                    .filter(ChatMessage.timestamp >= since)\
+                    .filter(ChatMessage.channel_id != channel_id)\
+                    .filter(ChatMessage.username.in_(current_users))\
+                    .distinct().all()
+
+                cross_channel_users_count = len(recent_active_users)
+                hive_mind_stats["cross_channel_users"] = cross_channel_users_count
+
+                if cross_channel_users_count > 5: # If more than 5 users are hopping channels simultaneously
+                    score += 10
+            except Exception as e:
+                print(f"Hive mind query error: {e}")
+
         score = min(score, 100.0)
+
+        # Alerting
+        if score > 80 and Config.DISCORD_WEBHOOK_URL:
+            send_discord_alert(channel, score, stats.viewer_count, age_stats)
 
         # Save result
         result = AnalysisResult(
@@ -119,7 +167,9 @@ def analyze_channel(channel_id):
                 "chatter_count": stats.chatter_count,
                 "message_count": len(messages),
                 "languages": langs,
-                "account_age": age_stats
+                "account_age": age_stats,
+                "sentiment": sentiment,
+                "hive_mind": hive_mind_stats
             }
         )
         db.session.add(result)

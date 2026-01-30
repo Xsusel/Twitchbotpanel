@@ -28,6 +28,14 @@
                 <p>Loading...</p>
             </div>
         </div>
+
+        <!-- Advanced Metrics (Sentiment & Hive Mind) -->
+        <div class="card">
+            <h3>Advanced Metrics</h3>
+            <div id="advancedData">
+                <p>Loading...</p>
+            </div>
+        </div>
     </div>
 
     <!-- Chat Logs -->
@@ -150,6 +158,46 @@
                 `;
             } else {
                 ageDiv.innerHTML = '<p>No account data yet.</p>';
+            }
+
+            // Advanced Metrics (Sentiment & Hive Mind)
+            const advDiv = document.getElementById('advancedData');
+            if (data.sentiment || data.hive_mind) {
+                let html = '';
+
+                if (data.sentiment) {
+                    const pol = data.sentiment.polarity; // -1 to 1
+                    const polPercent = (pol + 1) * 50; // 0 to 100
+                    let polColor = '#ccc';
+                    if (pol < -0.3) polColor = '#cf6679';
+                    else if (pol > 0.3) polColor = '#03dac6';
+
+                    html += `
+                        <div class="stat-box">
+                            <h4>Chat Sentiment</h4>
+                            <div style="background: #444; height: 10px; border-radius: 5px; overflow: hidden; margin-top: 5px;">
+                                <div style="width: ${polPercent}%; background: ${polColor}; height: 100%;"></div>
+                            </div>
+                            <small>Polarity: ${pol}</small>
+                        </div>
+                    `;
+                }
+
+                if (data.hive_mind) {
+                    html += `
+                        <div class="stat-box">
+                            <h4>Cross-Channel Overlap</h4>
+                            <span class="stat-value ${data.hive_mind.cross_channel_users > 5 ? 'bad' : 'good'}">
+                                ${data.hive_mind.cross_channel_users}
+                            </span>
+                            <p style="margin:0; font-size:0.8em;">Users active in other channels</p>
+                        </div>
+                    `;
+                }
+
+                advDiv.innerHTML = html;
+            } else {
+                advDiv.innerHTML = '<p>No advanced data.</p>';
             }
 
         } catch (error) {
