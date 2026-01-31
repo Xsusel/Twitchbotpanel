@@ -4,7 +4,7 @@ from app.auth import login_required
 from app.tasks import analyze_channel, delete_channel_task
 from app.analysis import generate_wordcloud, analyze_sentiment, analyze_viewer_growth, extract_trending_topics
 from app.network_analysis import generate_user_network
-from app.analytics_extended import calculate_join_part_velocity, find_message_clusters, analyze_lurkers, generate_chat_heatmap, check_cross_stream_zombies
+from app.analytics_extended import calculate_join_part_velocity, find_message_clusters, analyze_lurkers, generate_chat_heatmap, check_cross_stream_zombies, get_account_age_distribution, get_follower_velocity, analyze_username_patterns, get_global_threat_level, generate_stream_network
 from app.reports import generate_pdf_report
 from datetime import datetime, timedelta
 import subprocess
@@ -325,6 +325,36 @@ def api_stream_heatmap(stream_id):
 @login_required
 def api_stream_zombies(stream_id):
     data = check_cross_stream_zombies(stream_id)
+    return jsonify(data)
+
+@main.route('/api/stream/<int:stream_id>/account_age')
+@login_required
+def api_stream_account_age(stream_id):
+    data = get_account_age_distribution(stream_id)
+    return jsonify(data)
+
+@main.route('/api/stream/<int:stream_id>/follower_velocity')
+@login_required
+def api_stream_follower_velocity(stream_id):
+    data = get_follower_velocity(stream_id)
+    return jsonify(data)
+
+@main.route('/api/stream/<int:stream_id>/patterns')
+@login_required
+def api_stream_patterns(stream_id):
+    data = analyze_username_patterns(stream_id)
+    return jsonify(data)
+
+@main.route('/api/stream/<int:stream_id>/threat_level')
+@login_required
+def api_stream_threat_level(stream_id):
+    score = get_global_threat_level(stream_id)
+    return jsonify({'score': score})
+
+@main.route('/api/stream/<int:stream_id>/network')
+@login_required
+def api_stream_network(stream_id):
+    data = generate_stream_network(stream_id)
     return jsonify(data)
 
 @main.route('/add_channel', methods=['POST'])
