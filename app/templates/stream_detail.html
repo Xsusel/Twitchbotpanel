@@ -9,6 +9,21 @@
     </div>
 </div>
 
+<!-- Global Threat -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card bg-dark border-danger">
+            <div class="card-header bg-danger text-white"><h3>Globalny Poziom Zagrożenia (Botometer)</h3></div>
+            <div class="card-body text-center">
+                 <div style="height: 200px; width: 400px; margin: 0 auto;">
+                     <canvas id="threatGauge"></canvas>
+                 </div>
+                 <h2 id="threatScoreDisplay" class="display-4 text-danger font-weight-bold">0/100</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="row">
     <div class="col-md-8 mb-4">
         <div class="card h-100">
@@ -33,13 +48,51 @@
 </div>
 
 <div class="row">
+    <!-- Wiek Kont -->
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header">Wiek Kont Widzów</div>
+            <div class="card-body">
+                <div style="height: 300px;">
+                    <canvas id="ageChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Patterns -->
+    <div class="col-md-4 mb-4">
+         <div class="card h-100 border-light">
+             <div class="card-header">Wzorce Nicków (Entropia)</div>
+             <div class="card-body">
+                 <div style="height: 200px;">
+                     <canvas id="patternsChart"></canvas>
+                 </div>
+                 <hr>
+                 <small id="patternsList" class="text-muted"></small>
+             </div>
+         </div>
+    </div>
+    <!-- Clusters -->
+    <div class="col-md-4 mb-4">
+         <div class="card h-100 border-secondary">
+             <div class="card-header">Klastry Spamu (Bubble Chart)</div>
+             <div class="card-body bg-dark">
+                 <div style="height: 300px;">
+                     <canvas id="clustersChart"></canvas>
+                 </div>
+             </div>
+         </div>
+    </div>
+</div>
+
+<div class="row">
     <!-- Velocity -->
     <div class="col-md-6 mb-4">
         <div class="card h-100">
-            <div class="card-header">Tempo Przyrostu/Odpływu (Velocity)</div>
+            <div class="card-header">Dynamika Followersów vs Wiadomości</div>
             <div class="card-body">
                 <div style="height: 250px;">
-                    <canvas id="velocityChart"></canvas>
+                    <canvas id="followerVelocityChart"></canvas>
                 </div>
             </div>
         </div>
@@ -57,9 +110,21 @@
     </div>
 </div>
 
+<!-- Network Graph -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-primary">
+            <div class="card-header bg-primary text-white">Sieć Interakcji Użytkowników</div>
+            <div class="card-body p-0">
+                <div id="networkGraph" style="height: 600px; background-color: #111;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="row">
     <!-- Lurkers -->
-    <div class="col-md-4 mb-4">
+    <div class="col-md-6 mb-4">
         <div class="card h-100 border-info">
              <div class="card-header bg-info text-dark">Analiza Lurkerów</div>
              <div class="card-body text-white" id="lurkerData">
@@ -68,23 +133,13 @@
         </div>
     </div>
     <!-- Zombies -->
-    <div class="col-md-4 mb-4">
+    <div class="col-md-6 mb-4">
         <div class="card h-100 border-warning">
              <div class="card-header bg-warning text-dark">Globalne Zombie (Cross-Stream)</div>
              <div class="card-body" id="zombieData">
                  <div class="spinner-border text-warning" role="status"></div>
              </div>
         </div>
-    </div>
-    <!-- Clusters -->
-    <div class="col-md-4 mb-4">
-         <div class="card h-100 border-secondary">
-             <div class="card-header">Klastry Spamu</div>
-             <div class="card-body p-0 bg-dark">
-                 <ul class="list-group list-group-flush bg-dark" id="clusterList" style="max-height: 300px; overflow-y: auto;">
-                 </ul>
-             </div>
-         </div>
     </div>
 </div>
 
@@ -128,15 +183,20 @@
 {% endblock %}
 
 {% block scripts %}
+<script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
 <script>
     const streamId = {{ stream.id }};
     const ctx = document.getElementById('streamChart').getContext('2d');
-    const velocityCtx = document.getElementById('velocityChart').getContext('2d');
+    const velocityCtx = document.getElementById('followerVelocityChart').getContext('2d');
     const heatmapCtx = document.getElementById('heatmapChart').getContext('2d');
+    const ageCtx = document.getElementById('ageChart').getContext('2d');
+    const patternsCtx = document.getElementById('patternsChart').getContext('2d');
+    const threatCtx = document.getElementById('threatGauge').getContext('2d');
+    const clustersCtx = document.getElementById('clustersChart').getContext('2d');
     let suspiciousTable;
 
     async function loadData() {
-        // Stats & Growth
+        // 1. Stats & Growth
         const statsRes = await fetch(`/api/stream/${streamId}/stats`);
         const statsData = await statsRes.json();
 
@@ -175,24 +235,165 @@
             options: { responsive: true, maintainAspectRatio: false }
         });
 
-        // Velocity
-        const velRes = await fetch(`/api/stream/${streamId}/velocity`);
+        // 2. Account Age
+        const ageRes = await fetch(`/api/stream/${streamId}/account_age`);
+        const ageData = await ageRes.json();
+        new Chart(ageCtx, {
+            type: 'bar',
+            data: {
+                labels: Object.keys(ageData),
+                datasets: [{
+                    label: 'Liczba Kont',
+                    data: Object.values(ageData),
+                    backgroundColor: ['#dc3545', '#fd7e14', '#ffc107', '#28a745', '#007bff']
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+
+        // 3. Follower Velocity (Dual Axis)
+        const velRes = await fetch(`/api/stream/${streamId}/follower_velocity`);
         const velData = await velRes.json();
         new Chart(velocityCtx, {
             type: 'line',
             data: {
                 labels: velData.timestamps,
                 datasets: [{
-                    label: 'Zmiana Widzów/min',
-                    data: velData.velocity,
+                    label: 'Nowi Followers',
+                    data: velData.followers,
                     borderColor: '#28a745',
-                    borderWidth: 1,
-                    pointRadius: 1,
-                    fill: false
+                    yAxisID: 'y',
+                    fill: false,
+                    tension: 0.3
+                }, {
+                    label: 'Wiadomości',
+                    data: velData.messages,
+                    borderColor: '#007bff',
+                    yAxisID: 'y1',
+                    fill: false,
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                scales: {
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: { display: true, text: 'Followers' }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        grid: { drawOnChartArea: false },
+                        title: { display: true, text: 'Wiadomości' }
+                    },
+                }
+            }
+        });
+
+        // 4. Patterns
+        const patRes = await fetch(`/api/stream/${streamId}/patterns`);
+        const patData = await patRes.json();
+        new Chart(patternsCtx, {
+            type: 'pie',
+            data: {
+                labels: Object.keys(patData.entropy_dist),
+                datasets: [{
+                    data: Object.values(patData.entropy_dist),
+                    backgroundColor: ['#dc3545', '#ffc107', '#28a745']
                 }]
             },
             options: { responsive: true, maintainAspectRatio: false }
         });
+
+        let patHtml = `<strong>Podejrzanych nicków: ${patData.suspicious_patterns_count}</strong><br>`;
+        if (patData.top_patterns.length > 0) {
+             patHtml += `<small>Przykłady: ${patData.top_patterns.join(', ')}</small>`;
+        } else {
+             patHtml += `<small>Brak ewidentnych wzorców botów.</small>`;
+        }
+        document.getElementById('patternsList').innerHTML = patHtml;
+
+        // 5. Global Threat (Gauge)
+        const threatRes = await fetch(`/api/stream/${streamId}/threat_level`);
+        const threatData = await threatRes.json();
+        const score = threatData.score;
+        document.getElementById('threatScoreDisplay').innerText = `${score}/100`;
+
+        new Chart(threatCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Zagrożenie', 'Bezpieczeństwo'],
+                datasets: [{
+                    data: [score, 100 - score],
+                    backgroundColor: [
+                        score > 70 ? '#dc3545' : (score > 30 ? '#ffc107' : '#28a745'),
+                        '#222'
+                    ],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                circumference: 180,
+                rotation: -90,
+                cutout: '75%',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { enabled: false }
+                }
+            }
+        });
+
+        // 6. Network Graph
+        const netRes = await fetch(`/api/stream/${streamId}/network`);
+        const netData = await netRes.json();
+
+        if (netData.nodes && netData.nodes.length > 0) {
+            const container = document.getElementById('networkGraph');
+            const data = {
+                nodes: new vis.DataSet(netData.nodes),
+                edges: new vis.DataSet(netData.edges)
+            };
+            const options = {
+                nodes: {
+                    shape: 'dot',
+                    font: { color: '#ffffff' }
+                },
+                edges: {
+                    color: { color: '#555', highlight: '#007bff' },
+                    arrows: { to: { enabled: true, scaleFactor: 0.5 } },
+                    smooth: { type: 'continuous' }
+                },
+                physics: {
+                    stabilization: false,
+                    barnesHut: {
+                        gravitationalConstant: -3000,
+                        centralGravity: 0.3,
+                        springLength: 95,
+                        springConstant: 0.04,
+                        damping: 0.09
+                    }
+                },
+                layout: { improvedLayout: false },
+                interaction: {
+                    tooltipDelay: 200,
+                    hideEdgesOnDrag: true
+                }
+            };
+            new vis.Network(container, data, options);
+        } else {
+             document.getElementById('networkGraph').innerHTML = '<div class="text-white p-5 text-center">Brak wystarczających danych interakcji do zbudowania grafu.</div>';
+        }
 
         // Heatmap (Bar chart for now)
         const heatRes = await fetch(`/api/stream/${streamId}/heatmap`);
@@ -260,31 +461,53 @@
             document.getElementById('zombieData').innerHTML = `<div class="text-success">Brak Zombie aktywnych na innych kanałach.</div>`;
         }
 
-        // Clusters
+        // Clusters (Bubble Chart)
         const clusRes = await fetch(`/api/stream/${streamId}/clusters`);
         const clusData = await clusRes.json();
-        const clusterList = document.getElementById('clusterList');
-        clusData.forEach(c => {
-            const li = document.createElement('li');
-            li.className = "list-group-item bg-dark text-white border-secondary";
 
-            const badge = document.createElement('span');
-            badge.className = "badge bg-danger rounded-pill float-end";
-            badge.textContent = c.count;
-            li.appendChild(badge);
+        const bubbleData = clusData.map((c, index) => ({
+            x: index,
+            y: c.count,
+            r: Math.min(50, Math.max(5, c.count / 2)),
+            pattern: c.pattern,
+            samples: c.samples
+        }));
 
-            const strong = document.createElement('strong');
-            strong.textContent = c.pattern;
-            li.appendChild(strong);
-
-            li.appendChild(document.createElement('br'));
-
-            const small = document.createElement('small');
-            small.className = "text-muted";
-            small.textContent = c.samples.join(', ');
-            li.appendChild(small);
-
-            clusterList.appendChild(li);
+        new Chart(clustersCtx, {
+            type: 'bubble',
+            data: {
+                datasets: [{
+                    label: 'Grupy podobnych wiadomości',
+                    data: bubbleData,
+                    backgroundColor: 'rgba(220, 53, 69, 0.6)',
+                    borderColor: '#dc3545'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { display: false },
+                    y: {
+                        title: { display: true, text: 'Liczebność grupy' },
+                        beginAtZero: true
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const item = context.raw;
+                                return `"${item.pattern}": ${item.y} wystąpień`;
+                            },
+                            afterLabel: function(context) {
+                                 // Show samples
+                                 return "Przykłady: " + context.raw.samples.slice(0,3).join(', ');
+                            }
+                        }
+                    }
+                }
+            }
         });
 
         // Suspicious Viewers
