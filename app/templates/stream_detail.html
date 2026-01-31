@@ -47,6 +47,58 @@
     </div>
 </div>
 
+<!-- NEW ANALYTICS ROW 1 -->
+<div class="row">
+    <!-- Inter-Arrival Histogram -->
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+             <div class="card-header">Rozkład Czasu Między Wiadomościami (Inter-Arrival)</div>
+             <div class="card-body">
+                 <div style="height: 250px;">
+                     <canvas id="interArrivalChart"></canvas>
+                 </div>
+                 <small class="text-muted">Wykrywanie regularnych odstępów (botów).</small>
+             </div>
+        </div>
+    </div>
+    <!-- Correlation -->
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+             <div class="card-header">Korelacja: Widzowie vs Czatujący</div>
+             <div class="card-body">
+                 <div style="height: 250px;">
+                     <canvas id="correlationChart"></canvas>
+                 </div>
+                 <small class="text-muted">Szukanie "pustych" widzów (Viewbotting).</small>
+             </div>
+        </div>
+    </div>
+</div>
+
+<!-- NEW ANALYTICS ROW 2 -->
+<div class="row">
+    <!-- Repeated Sequences -->
+    <div class="col-md-6 mb-4">
+         <div class="card h-100 border-warning">
+             <div class="card-header bg-warning text-dark">Powtarzalne Sekwencje (Skrypty)</div>
+             <div class="card-body bg-dark" id="sequencesList" style="overflow-y: auto; max-height: 300px;">
+                 <div class="text-center text-muted p-4"><div class="spinner-border" role="status"></div></div>
+             </div>
+         </div>
+    </div>
+     <!-- Sentiment History -->
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+             <div class="card-header">Ewolucja Sentymentu</div>
+             <div class="card-body">
+                 <div style="height: 250px;">
+                     <canvas id="sentimentHistoryChart"></canvas>
+                 </div>
+             </div>
+        </div>
+    </div>
+</div>
+
 <div class="row">
     <!-- Wiek Kont -->
     <div class="col-md-3 mb-4">
@@ -83,7 +135,7 @@
              </div>
          </div>
     </div>
-    <!-- Suspicion Distribution (NEW) -->
+    <!-- Suspicion Distribution -->
     <div class="col-md-3 mb-4">
          <div class="card h-100 border-danger">
              <div class="card-header">Rozkład Podejrzliwości</div>
@@ -97,7 +149,7 @@
 </div>
 
 <div class="row">
-    <!-- Session Durations (NEW) -->
+    <!-- Session Durations -->
     <div class="col-md-4 mb-4">
          <div class="card h-100">
              <div class="card-header">Czas Trwania Sesji</div>
@@ -108,7 +160,7 @@
              </div>
          </div>
     </div>
-     <!-- New Chatters (NEW) -->
+     <!-- New Chatters -->
     <div class="col-md-4 mb-4">
          <div class="card h-100">
              <div class="card-header">Nowi Użytkownicy (%)</div>
@@ -119,7 +171,7 @@
              </div>
          </div>
     </div>
-    <!-- Hive Mind (NEW) -->
+    <!-- Hive Mind -->
     <div class="col-md-4 mb-4">
          <div class="card h-100 border-warning">
              <div class="card-header">Hive Mind (Synchronizacja)</div>
@@ -165,6 +217,18 @@
             <div class="card-header bg-primary text-white">Sieć Interakcji Użytkowników</div>
             <div class="card-body p-0">
                 <div id="networkGraph" style="height: 600px; background-color: #111;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- BOTNET Graph (Cross-Channel) -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">Graf Botnetu (Powiązania Międzykanałowe)</div>
+            <div class="card-body p-0">
+                <div id="botnetGraph" style="height: 600px; background-color: #000;"></div>
             </div>
         </div>
     </div>
@@ -242,10 +306,14 @@
     const threatCtx = document.getElementById('threatGauge').getContext('2d');
     const clustersCtx = document.getElementById('clustersChart').getContext('2d');
 
-    // New Charts
     const suspicionDistCtx = document.getElementById('suspicionDistChart').getContext('2d');
     const sessionDurationCtx = document.getElementById('sessionDurationChart').getContext('2d');
     const newChattersCtx = document.getElementById('newChattersChart').getContext('2d');
+
+    // NEW Contexts
+    const interArrivalCtx = document.getElementById('interArrivalChart').getContext('2d');
+    const correlationCtx = document.getElementById('correlationChart').getContext('2d');
+    const sentimentHistoryCtx = document.getElementById('sentimentHistoryChart').getContext('2d');
 
     let suspiciousTable;
 
@@ -564,9 +632,7 @@
             }
         });
 
-        // --- NEW CHARTS IMPLEMENTATION ---
-
-        // 1. Suspicion Distribution
+        // Suspicion Distribution
         const susDistRes = await fetch(`/api/stream/${streamId}/suspicion_distribution`);
         const susDistData = await susDistRes.json();
 
@@ -592,7 +658,7 @@
             }
         });
 
-        // 2. Session Durations
+        // Session Durations
         const sessRes = await fetch(`/api/stream/${streamId}/session_durations`);
         const sessData = await sessRes.json();
 
@@ -608,7 +674,7 @@
             options: { responsive: true, maintainAspectRatio: false }
         });
 
-        // 3. New Chatters Ratio
+        // New Chatters Ratio
         const newChatRes = await fetch(`/api/stream/${streamId}/new_chatters`);
         const newChatData = await newChatRes.json();
 
@@ -635,7 +701,7 @@
             }
         });
 
-        // 4. Hive Mind List
+        // Hive Mind List
         const hiveRes = await fetch(`/api/stream/${streamId}/hive_mind`);
         const hiveData = await hiveRes.json();
         const hiveContainer = document.getElementById('hiveMindList');
@@ -657,6 +723,131 @@
             hiveContainer.innerHTML = html;
         } else {
             hiveContainer.innerHTML = '<div class="text-success p-3 text-center"><i class="fas fa-check"></i> Brak wykrytej synchronizacji</div>';
+        }
+
+        // --- NEW CHARTS FETCH ---
+
+        // 7. Inter-Arrival
+        const interRes = await fetch(`/api/stream/${streamId}/inter_arrival`);
+        const interData = await interRes.json();
+
+        new Chart(interArrivalCtx, {
+            type: 'bar',
+            data: {
+                labels: interData.labels,
+                datasets: [{
+                    label: 'Liczba Wiadomości',
+                    data: interData.counts,
+                    backgroundColor: '#6610f2'
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+
+        // 8. Sequences
+        const seqRes = await fetch(`/api/stream/${streamId}/sequences`);
+        const seqData = await seqRes.json();
+        const seqContainer = document.getElementById('sequencesList');
+
+        if (seqData.length > 0) {
+            let html = '<ul class="list-group list-group-flush text-dark">';
+            seqData.forEach(s => {
+                html += `
+                    <li class="list-group-item bg-dark text-white border-secondary">
+                        <span class="badge bg-warning text-dark float-end">${s.count} powtórzeń</span>
+                        <span class="text-info">"${s.sequence.join(' ')}"</span>
+                    </li>
+                `;
+            });
+            html += '</ul>';
+            seqContainer.innerHTML = html;
+        } else {
+            seqContainer.innerHTML = '<div class="text-center text-muted p-4">Brak powtarzalnych sekwencji.</div>';
+        }
+
+        // 9. Correlation
+        const corrRes = await fetch(`/api/stream/${streamId}/correlation`);
+        const corrData = await corrRes.json();
+
+        new Chart(correlationCtx, {
+            type: 'scatter',
+            data: {
+                datasets: [{
+                    label: 'Punkty Czasowe',
+                    data: corrData, // {x: viewers, y: chatters}
+                    backgroundColor: 'rgba(255, 99, 132, 0.5)'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { title: { display: true, text: 'Widzowie' } },
+                    y: { title: { display: true, text: 'Aktywni Czatujący' } }
+                }
+            }
+        });
+
+        // 10. Sentiment History
+        const sentRes = await fetch(`/api/stream/${streamId}/sentiment_history`);
+        const sentData = await sentRes.json();
+
+        new Chart(sentimentHistoryCtx, {
+            type: 'line',
+            data: {
+                labels: sentData.times,
+                datasets: [{
+                    label: 'Sentyment (-1 do 1)',
+                    data: sentData.sentiment,
+                    borderColor: '#20c997',
+                    fill: false,
+                    tension: 0.2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { min: -1, max: 1 }
+                }
+            }
+        });
+
+        // 11. Botnet Graph
+        const botnetRes = await fetch(`/api/stream/${streamId}/botnet_graph`);
+        const botnetData = await botnetRes.json();
+
+        if (botnetData.nodes && botnetData.nodes.length > 0) {
+            const container = document.getElementById('botnetGraph');
+            const data = {
+                nodes: new vis.DataSet(botnetData.nodes),
+                edges: new vis.DataSet(botnetData.edges)
+            };
+            const options = {
+                nodes: {
+                    font: { color: '#ffffff' }
+                },
+                edges: {
+                    color: { color: '#dc3545' },
+                    arrows: { to: { enabled: true } }
+                },
+                physics: {
+                     forceAtlas2Based: {
+                        gravitationalConstant: -50,
+                        centralGravity: 0.01,
+                        springConstant: 0.08,
+                        springLength: 100,
+                        damping: 0.4,
+                        avoidOverlap: 0
+                     },
+                     maxVelocity: 50,
+                     minVelocity: 0.1,
+                     solver: 'forceAtlas2Based'
+                }
+            };
+            new vis.Network(container, data, options);
+        } else {
+             document.getElementById('botnetGraph').innerHTML = '<div class="text-white p-5 text-center">Brak wystarczających danych powiązań międzykanałowych.</div>';
         }
 
         // Suspicious Viewers

@@ -4,7 +4,7 @@ from app.auth import login_required
 from app.tasks import analyze_channel, delete_channel_task
 from app.analysis import generate_wordcloud, analyze_sentiment, analyze_viewer_growth, extract_trending_topics
 from app.network_analysis import generate_user_network
-from app.analytics_extended import calculate_join_part_velocity, find_message_clusters, analyze_lurkers, generate_chat_heatmap, check_cross_stream_zombies, get_account_age_distribution, get_follower_velocity, analyze_username_patterns, get_global_threat_level, generate_stream_network, get_suspicion_distribution, analyze_temporal_synchronization, analyze_new_chatters_over_time, analyze_session_durations
+from app.analytics_extended import calculate_join_part_velocity, find_message_clusters, analyze_lurkers, generate_chat_heatmap, check_cross_stream_zombies, get_account_age_distribution, get_follower_velocity, analyze_username_patterns, get_global_threat_level, generate_stream_network, get_suspicion_distribution, analyze_temporal_synchronization, analyze_new_chatters_over_time, analyze_session_durations, get_inter_arrival_histogram, get_repeated_sequences, get_chatter_viewer_correlation, get_sentiment_timeseries, get_cross_channel_graph
 from app.reports import generate_pdf_report
 from app.utils import to_warsaw_time
 from datetime import datetime, timedelta
@@ -391,6 +391,40 @@ def api_stream_session_durations(stream_id):
     data = analyze_session_durations(stream_id)
     return jsonify(data)
 
+# --- NEW ANALYTICS ENDPOINTS ---
+
+@main.route('/api/stream/<int:stream_id>/inter_arrival')
+@login_required
+def api_stream_inter_arrival(stream_id):
+    data = get_inter_arrival_histogram(stream_id)
+    return jsonify(data)
+
+@main.route('/api/stream/<int:stream_id>/sequences')
+@login_required
+def api_stream_sequences(stream_id):
+    data = get_repeated_sequences(stream_id)
+    return jsonify(data)
+
+@main.route('/api/stream/<int:stream_id>/correlation')
+@login_required
+def api_stream_correlation(stream_id):
+    data = get_chatter_viewer_correlation(stream_id)
+    return jsonify(data)
+
+@main.route('/api/stream/<int:stream_id>/sentiment_history')
+@login_required
+def api_stream_sentiment_history(stream_id):
+    data = get_sentiment_timeseries(stream_id)
+    return jsonify(data)
+
+@main.route('/api/stream/<int:stream_id>/botnet_graph')
+@login_required
+def api_stream_botnet_graph(stream_id):
+    data = get_cross_channel_graph(stream_id)
+    return jsonify(data)
+
+# -------------------------------
+
 @main.route('/add_channel', methods=['POST'])
 @login_required
 def add_channel():
@@ -428,12 +462,31 @@ def user_profile(username):
     # Fetch all messages from this user across all channels
     messages = ChatMessage.query.filter_by(username=username).order_by(ChatMessage.timestamp.desc()).all()
 
-    if not messages:
+    # Try to find Viewer record (might exist multiple times for different channels)
+    viewer_records = Viewer.query.filter_by(username=username).all()
+
+    if not messages and not viewer_records:
         flash(f'Użytkownik {username} nie znaleziony w bazie.')
         return redirect(url_for('main.index'))
 
     total_messages = len(messages)
     channels_seen = set(m.channel_id for m in messages)
+
+    # Aggregate suspicion info
+    max_suspicion = 0
+    reasons = set()
+    first_seen = datetime.max
+    last_seen = datetime.min
+
+    for v in viewer_records:
+        if v.suspicion_score > max_suspicion:
+            max_suspicion = v.suspicion_score
+        if v.suspicion_reason:
+            reasons.add(v.suspicion_reason)
+        if v.first_seen and v.first_seen < first_seen:
+            first_seen = v.first_seen
+        if v.last_seen and v.last_seen > last_seen:
+            last_seen = v.last_seen
 
     # Calculate sentiment
     sentiment = analyze_sentiment(messages)
@@ -447,9 +500,15 @@ def user_profile(username):
                            username=username,
                            total_messages=total_messages,
                            channels_count=len(channels_seen),
+                           channels_seen_names=[Channel.query.get(cid).name for cid in channels_seen if Channel.query.get(cid)],
                            avg_sentiment=sentiment['polarity'],
                            activity_data=activity_data,
-                           recent_messages=messages[:50])
+                           recent_messages=messages[:500], # Pass more for DataTable
+                           suspicion_score=max_suspicion,
+                           suspicion_reasons=list(reasons),
+                           first_seen=first_seen if first_seen != datetime.max else None,
+                           last_seen=last_seen if last_seen != datetime.min else None
+                           )
 
 @main.route('/update', methods=['POST'])
 @login_required

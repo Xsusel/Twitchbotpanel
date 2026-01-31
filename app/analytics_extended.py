@@ -1,10 +1,12 @@
-from app.models import db, StreamStats, ChatMessage, StreamViewerStats, Viewer, Stream, AnalysisResult
+from app.models import db, StreamStats, ChatMessage, StreamViewerStats, Viewer, Stream, AnalysisResult, Channel
 from datetime import datetime, timedelta
 import Levenshtein
 from sqlalchemy import func, distinct
 import math
 import re
 import networkx as nx
+from textblob import TextBlob
+from collections import Counter
 
 def calculate_join_part_velocity(stream_id):
     """
@@ -607,3 +609,213 @@ def analyze_session_durations(stream_id):
         else: buckets['>1h'] += 1
 
     return buckets
+
+def get_inter_arrival_histogram(stream_id):
+    """
+    Calculates the distribution of time deltas between consecutive messages.
+    """
+    messages = db.session.query(ChatMessage.timestamp).filter(
+        ChatMessage.stream_id == stream_id
+    ).order_by(ChatMessage.timestamp.asc()).all()
+
+    if len(messages) < 2:
+        return {'bins': [], 'counts': []}
+
+    deltas = []
+    for i in range(1, len(messages)):
+        diff = (messages[i][0] - messages[i-1][0]).total_seconds()
+        deltas.append(diff)
+
+    # Buckets: 0-1, 1-2, ... 9-10, >10
+    buckets = {i: 0 for i in range(11)} # 0..10
+
+    for d in deltas:
+        if d >= 10:
+            buckets[10] += 1
+        else:
+            buckets[int(d)] += 1
+
+    labels = [f"{i}-{i+1}s" for i in range(10)] + [">10s"]
+    counts = [buckets[i] for i in range(11)]
+
+    return {'labels': labels, 'counts': counts}
+
+def get_repeated_sequences(stream_id, n=3):
+    """
+    Finds top N-grams of messages (sequences of 3 messages).
+    Useful to detect bot scripts repeating conversations.
+    """
+    messages = db.session.query(ChatMessage.message).filter(
+        ChatMessage.stream_id == stream_id
+    ).order_by(ChatMessage.timestamp.asc()).all()
+
+    msgs = [m[0].strip().lower() for m in messages]
+    if len(msgs) < n:
+        return []
+
+    sequences = []
+    for i in range(len(msgs) - n + 1):
+        seq = tuple(msgs[i:i+n])
+        sequences.append(seq)
+
+    # Filter out sequences that are just same word repeated? "lol", "lol", "lol"
+    # Maybe not, that is also suspicious or just spam.
+
+    counter = Counter(sequences)
+
+    # Get top 20, but filter for count > 1
+    most_common = counter.most_common(20)
+    result = []
+    for seq, count in most_common:
+        if count > 1:
+            result.append({'sequence': list(seq), 'count': count})
+
+    return result
+
+def get_chatter_viewer_correlation(stream_id):
+    """
+    Returns X (Viewers) and Y (Active Chatters) for scatter plot.
+    """
+    stats = StreamStats.query.filter_by(stream_id=stream_id).order_by(StreamStats.timestamp.asc()).all()
+
+    data = []
+    for s in stats:
+        data.append({
+            'x': s.viewer_count,
+            'y': s.active_chatter_count, # or s.chatter_count? active is better for activity correlation
+            'time': s.timestamp.isoformat()
+        })
+    return data
+
+def get_sentiment_timeseries(stream_id, bucket_minutes=5):
+    """
+    Returns average sentiment over time.
+    """
+    stream = Stream.query.get(stream_id)
+    if not stream:
+        return {'times': [], 'sentiment': []}
+
+    messages = db.session.query(ChatMessage.timestamp, ChatMessage.message).filter(
+        ChatMessage.stream_id == stream_id
+    ).order_by(ChatMessage.timestamp.asc()).all()
+
+    start_time = stream.started_at
+
+    buckets = {} # bucket_idx -> [scores]
+
+    for ts, text in messages:
+        delta = ts - start_time
+        minutes = int(delta.total_seconds() / 60)
+        bucket_idx = (minutes // bucket_minutes) * bucket_minutes
+
+        blob = TextBlob(text)
+        score = blob.sentiment.polarity
+
+        if bucket_idx not in buckets:
+            buckets[bucket_idx] = []
+        buckets[bucket_idx].append(score)
+
+    sorted_times = sorted(buckets.keys())
+    times_out = []
+    scores_out = []
+
+    for t in sorted_times:
+        scores = buckets[t]
+        avg = sum(scores) / len(scores) if scores else 0
+        times_out.append(t)
+        scores_out.append(round(avg, 2))
+
+    return {'times': times_out, 'sentiment': scores_out}
+
+def get_cross_channel_graph(stream_id):
+    """
+    Builds a graph of users in this stream who are also present in other channels.
+    Nodes: Users (Central), Channels (Linked).
+    """
+    # 1. Get usernames of current stream viewers
+    current_usernames = [r[0] for r in db.session.query(Viewer.username).join(StreamViewerStats).filter(
+        StreamViewerStats.stream_id == stream_id
+    ).all()]
+
+    if not current_usernames:
+        return {'nodes': [], 'edges': []}
+
+    # 2. Get active streams (excluding current)
+    active_streams = Stream.query.filter(Stream.is_live == True, Stream.id != stream_id).all()
+    active_stream_ids = [s.id for s in active_streams]
+
+    if not active_stream_ids:
+        return {'nodes': [], 'edges': []}
+
+    # 3. Find these usernames in other active streams
+    cross_presence = db.session.query(
+        Viewer.username,
+        StreamViewerStats.stream_id,
+        Viewer.suspicion_score,
+        Viewer.id
+    ).join(StreamViewerStats).filter(
+        StreamViewerStats.stream_id.in_(active_stream_ids),
+        Viewer.username.in_(current_usernames)
+    ).all()
+
+    if not cross_presence:
+        return {'nodes': [], 'edges': []}
+
+    G = nx.Graph()
+
+    # Map Stream IDs to Channel Names
+    streams = Stream.query.filter(Stream.id.in_(active_stream_ids)).all()
+    channel_map = {s.id: s.channel.name for s in streams}
+
+    # Add Channel Nodes (Other Channels)
+    for sid, name in channel_map.items():
+        G.add_node(f"C_{sid}", label=name, type='channel')
+
+    # Add User Nodes and Edges
+    for username, sid, score, vid in cross_presence:
+        u_node = f"U_{username}"
+
+        if not G.has_node(u_node):
+            G.add_node(u_node, label=username, type='user', score=score)
+
+        if sid in channel_map:
+            G.add_edge(u_node, f"C_{sid}")
+
+    # Add Current Stream Node
+    current_stream = Stream.query.get(stream_id)
+    if current_stream:
+        c_node = f"C_{stream_id}"
+        G.add_node(c_node, label=current_stream.channel.name, type='channel', current=True)
+        # Link all found users to this node too
+        for username, _, _, _ in cross_presence:
+             u_node = f"U_{username}"
+             G.add_edge(u_node, c_node)
+
+    # Format
+    nodes = []
+    for n, attr in G.nodes(data=True):
+        if attr['type'] == 'channel':
+            color = '#0053f1'
+            if attr.get('current'): color = '#6610f2'
+            nodes.append({
+                'id': n,
+                'label': attr['label'],
+                'shape': 'box',
+                'color': color,
+                'font': {'color': 'white'}
+            })
+        else:
+            color = '#28a745'
+            if attr['score'] > 70: color = '#dc3545'
+            elif attr['score'] > 30: color = '#ffc107'
+            nodes.append({
+                'id': n,
+                'label': attr['label'],
+                'shape': 'dot',
+                'color': color,
+                'size': 10
+            })
+
+    edges = [{'from': u, 'to': v} for u, v in G.edges()]
+
+    return {'nodes': nodes, 'edges': edges}

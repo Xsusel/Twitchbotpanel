@@ -7,6 +7,8 @@ from wordcloud import WordCloud
 import io
 import base64
 from app.models import StreamStats
+import re
+from collections import Counter
 
 def calculate_ratio(viewer_count, chatter_count):
     if viewer_count == 0:
@@ -110,6 +112,7 @@ def detect_dominant_language(messages):
 def get_language_distribution(messages):
     """
     Returns a dictionary {lang_code: count}.
+    Improved: Skips very short messages to avoid noise.
     """
     if not messages:
         return {}
@@ -117,8 +120,10 @@ def get_language_distribution(messages):
     counts = {}
     for msg in messages:
         text = msg.message if hasattr(msg, 'message') else msg.get('message', '')
-        if len(text) < 3: # Skip very short messages
+        # Improved: Ignore messages shorter than 5 characters to reduce noise (e.g. "xD", "lol")
+        if len(text) < 5:
             continue
+
         try:
             lang = detect(text)
             lang = normalize_lang(lang)
@@ -133,24 +138,46 @@ STOPWORDS = set([
     'i', 'w', 'na', 'z', 'do', 'o', 'a', 'że', 'to', 'jest', 'nie', 'ale', 'się', 'co', 'jak', 'tak',
     'mnie', 'mi', 'ci', 'mu', 'jej', 'nam', 'wam', 'im', 'ten', 'ta', 'to', 'tam', 'tu', 'gdzie', 'kiedy',
     'the', 'and', 'is', 'a', 'in', 'to', 'of', 'it', 'for', 'on', 'with', 'as', 'this', 'that', 'but',
-    'be', 'at', 'by', 'not', 'or', 'from', 'you', 'are', 'me', 'my', 'your', 'so', 'was', 'if', 'lol', 'xd', 'lmao'
+    'be', 'at', 'by', 'not', 'or', 'from', 'you', 'are', 'me', 'my', 'your', 'so', 'was', 'if', 'lol', 'xd', 'lmao',
+    'pog', 'kekw', 'monkaw', 'kappa' # Twitch slang
 ])
 
 def extract_trending_topics(messages, top_n=10):
+    """
+    Improved: Supports N-grams (1-3 words) to capture phrases.
+    """
     if not messages:
         return []
 
     text = " ".join([msg.message for msg in messages if hasattr(msg, 'message')]).lower()
+
     # Remove punctuation basic
-    import re
     text = re.sub(r'[^\w\s]', '', text)
     words = text.split()
 
-    # Filter
-    filtered = [w for w in words if len(w) > 3 and w not in STOPWORDS]
+    # Filter stopwords
+    filtered_words = [w for w in words if len(w) > 3 and w not in STOPWORDS]
 
-    from collections import Counter
-    counts = Counter(filtered)
+    if not filtered_words:
+        return []
+
+    # Generate N-grams (1, 2, 3)
+    ngrams = []
+
+    # Unigrams
+    ngrams.extend(filtered_words)
+
+    # Bigrams
+    for i in range(len(filtered_words) - 1):
+        ngrams.append(f"{filtered_words[i]} {filtered_words[i+1]}")
+
+    # Trigrams
+    for i in range(len(filtered_words) - 2):
+        ngrams.append(f"{filtered_words[i]} {filtered_words[i+1]} {filtered_words[i+2]}")
+
+    counts = Counter(ngrams)
+
+    # Return top N most common phrases
     return [t[0] for t in counts.most_common(top_n)]
 
 def analyze_usernames(messages):
