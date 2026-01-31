@@ -1,5 +1,5 @@
 flask
-twitchio
+twitchio==2.10.0
 sqlalchemy
 flask-sqlalchemy
 psycopg2-binary
