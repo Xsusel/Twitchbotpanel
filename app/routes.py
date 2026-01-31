@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify, flash, send_file, Response
 from app.models import db, Channel, ChatMessage, StreamStats, AnalysisResult, Stream, SystemConfig, Viewer, StreamViewerStats
 from app.auth import login_required
-from app.tasks import analyze_channel
+from app.tasks import analyze_channel, delete_channel_task
 from app.analysis import generate_wordcloud, analyze_sentiment, analyze_viewer_growth, extract_trending_topics
 from app.network_analysis import generate_user_network
 from app.reports import generate_pdf_report
@@ -316,9 +316,8 @@ def add_channel():
 def remove_channel(channel_id):
     channel = Channel.query.get(channel_id)
     if channel:
-        db.session.delete(channel)
-        db.session.commit()
-        flash(f'Kanał {channel.name} usunięty.')
+        delete_channel_task.delay(channel_id)
+        flash(f'Rozpoczęto usuwanie kanału {channel.name} w tle. To może chwilę potrwać.')
     return redirect(url_for('main.index'))
 
 @main.route('/analyze/<int:channel_id>')

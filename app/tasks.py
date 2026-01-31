@@ -305,3 +305,74 @@ def analyze_channel(channel_id):
 
     except Exception as e:
         print(f"Error analyzing channel {channel_id}: {e}")
+
+@celery.task
+def delete_channel_task(channel_id):
+    """Asynchronously deletes a channel and all its data."""
+    try:
+        channel = Channel.query.get(channel_id)
+        if not channel:
+            print(f"Channel {channel_id} not found during async deletion.")
+            return
+
+        print(f"Starting async deletion for channel: {channel.name} ({channel_id})")
+
+        # 1. Delete Messages (Heavy)
+        while True:
+            ids = db.session.query(ChatMessage.id).filter_by(channel_id=channel_id).limit(10000).all()
+            ids = [i[0] for i in ids]
+            if not ids:
+                break
+            deleted = ChatMessage.query.filter(ChatMessage.id.in_(ids)).delete(synchronize_session=False)
+            db.session.commit()
+            print(f"Deleted {deleted} messages...")
+
+        # 2. Delete StreamStats
+        while True:
+             ids = db.session.query(StreamStats.id).filter_by(channel_id=channel_id).limit(10000).all()
+             ids = [i[0] for i in ids]
+             if not ids:
+                 break
+             deleted = StreamStats.query.filter(StreamStats.id.in_(ids)).delete(synchronize_session=False)
+             db.session.commit()
+             print(f"Deleted {deleted} stats...")
+
+        # 3. Delete Viewers (Heavy)
+        while True:
+            ids = db.session.query(Viewer.id).filter_by(channel_id=channel_id).limit(10000).all()
+            ids = [i[0] for i in ids]
+            if not ids:
+                break
+            deleted = Viewer.query.filter(Viewer.id.in_(ids)).delete(synchronize_session=False)
+            db.session.commit()
+            print(f"Deleted {deleted} viewers...")
+
+        # 4. StreamViewerStats (via Streams)
+        # Finding streams first
+        streams = Stream.query.filter_by(channel_id=channel_id).all()
+        stream_ids = [s.id for s in streams]
+
+        # Delete StreamViewerStats in chunks
+        chunk_size = 500
+        for i in range(0, len(stream_ids), chunk_size):
+            batch = stream_ids[i:i+chunk_size]
+            StreamViewerStats.query.filter(StreamViewerStats.stream_id.in_(batch)).delete(synchronize_session=False)
+            db.session.commit()
+            print(f"Deleted batch of stream viewer stats...")
+
+        # 5. Analysis Results
+        AnalysisResult.query.filter_by(channel_id=channel_id).delete(synchronize_session=False)
+        db.session.commit()
+
+        # 6. Streams
+        Stream.query.filter_by(channel_id=channel_id).delete(synchronize_session=False)
+        db.session.commit()
+
+        # 7. Channel
+        db.session.delete(channel)
+        db.session.commit()
+        print(f"Channel {channel_id} deleted successfully.")
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting channel {channel_id}: {e}")
