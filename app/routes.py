@@ -207,7 +207,7 @@ def export_pdf(channel_id):
     messages = ChatMessage.query.filter_by(channel_id=channel_id).order_by(ChatMessage.timestamp.desc()).limit(100).all()
 
     if not latest_analysis or not latest_stats:
-        flash("Not enough data for report.")
+        flash("Brak wystarczających danych do raportu.")
         return redirect(url_for('main.channel_detail', channel_id=channel_id))
 
     pdf_bytes = generate_pdf_report(channel, latest_stats, latest_analysis, messages)
@@ -244,13 +244,14 @@ def api_network(channel_id):
 def add_channel():
     name = request.form.get('channel_name')
     if name:
+        name = name.strip()
         if not Channel.query.filter_by(name=name).first():
             channel = Channel(name=name)
             db.session.add(channel)
             db.session.commit()
-            flash(f'Channel {name} added.')
+            flash(f'Kanał {name} dodany.')
         else:
-            flash(f'Channel {name} already exists.')
+            flash(f'Kanał {name} już istnieje.')
     return redirect(url_for('main.index'))
 
 @main.route('/remove_channel/<int:channel_id>')
@@ -260,14 +261,14 @@ def remove_channel(channel_id):
     if channel:
         db.session.delete(channel)
         db.session.commit()
-        flash(f'Channel {channel.name} removed.')
+        flash(f'Kanał {channel.name} usunięty.')
     return redirect(url_for('main.index'))
 
 @main.route('/analyze/<int:channel_id>')
 @login_required
 def trigger_analysis(channel_id):
     analyze_channel.delay(channel_id)
-    flash('Analysis started.')
+    flash('Analiza rozpoczęta.')
     return redirect(url_for('main.channel_detail', channel_id=channel_id))
 
 @main.route('/user/<username>')
@@ -277,7 +278,7 @@ def user_profile(username):
     messages = ChatMessage.query.filter_by(username=username).order_by(ChatMessage.timestamp.desc()).all()
 
     if not messages:
-        flash(f'User {username} not found in database.')
+        flash(f'Użytkownik {username} nie znaleziony w bazie.')
         return redirect(url_for('main.index'))
 
     total_messages = len(messages)
@@ -315,7 +316,7 @@ def update_app():
         # Attempt migration via python directly
         subprocess.run(["python3", "migrate_db.py"], check=True)
 
-        flash('Update and migration initiated. Please restart services manually if needed.')
+        flash('Rozpoczęto aktualizację i migrację. W razie potrzeby zrestartuj usługi ręcznie.')
     except Exception as e:
-        flash(f'Update failed: {e}')
+        flash(f'Aktualizacja nieudana: {e}')
     return redirect(url_for('main.index'))

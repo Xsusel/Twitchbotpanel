@@ -5,18 +5,18 @@
     <div class="col-12 d-flex justify-content-between align-items-center">
         <h2 class="text-primary"><i class="fab fa-twitch"></i> {{ channel.name }}</h2>
         <div>
-            <a href="{{ url_for('main.trigger_analysis', channel_id=channel.id) }}" class="btn btn-warning me-2"><i class="fas fa-microscope"></i> Run Analysis</a>
-            <a href="{{ url_for('main.index') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+            <a href="{{ url_for('main.trigger_analysis', channel_id=channel.id) }}" class="btn btn-warning me-2"><i class="fas fa-microscope"></i> Uruchom Analizę</a>
+            <a href="{{ url_for('main.index') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Wróć</a>
         </div>
     </div>
 </div>
 
 <ul class="nav nav-tabs mb-4" id="channelTabs" role="tablist">
     <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="live-tab" data-bs-toggle="tab" data-bs-target="#live" type="button" role="tab">Live Dashboard</button>
+        <button class="nav-link active" id="live-tab" data-bs-toggle="tab" data-bs-target="#live" type="button" role="tab">Panel Na ŻYWO</button>
     </li>
     <li class="nav-item" role="presentation">
-        <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab">Stream History</button>
+        <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab">Historia Transmisji</button>
     </li>
 </ul>
 
@@ -28,7 +28,7 @@
             <!-- Main Stats Card -->
             <div class="col-lg-8 mb-4">
                 <div class="card h-100">
-                    <div class="card-header">Viewer vs Chatter Ratio (Last 24h / Active Stream)</div>
+                    <div class="card-header">Stosunek Widzów do Czatujących</div>
                     <div class="card-body">
                         <div style="height: 300px;">
                             <canvas id="ratioChart"></canvas>
@@ -40,7 +40,7 @@
             <!-- Language Distribution -->
             <div class="col-lg-4 mb-4">
                 <div class="card h-100">
-                    <div class="card-header">Language Distribution</div>
+                    <div class="card-header">Języki</div>
                     <div class="card-body">
                         <div style="height: 250px;">
                             <canvas id="langChart"></canvas>
@@ -54,7 +54,7 @@
             <!-- Account Age Metrics -->
             <div class="col-md-3 mb-4">
                 <div class="card h-100">
-                    <div class="card-header">Account Age</div>
+                    <div class="card-header">Wiek Kont</div>
                     <div class="card-body text-center" id="accountAgeData">
                         <div class="spinner-border text-primary" role="status"></div>
                     </div>
@@ -64,7 +64,7 @@
             <!-- Advanced Metrics -->
             <div class="col-md-3 mb-4">
                 <div class="card h-100">
-                    <div class="card-header">Sentiment & Overlap</div>
+                    <div class="card-header">Sentyment i Powiązania</div>
                     <div class="card-body text-center" id="advancedData">
                         <div class="spinner-border text-primary" role="status"></div>
                     </div>
@@ -74,7 +74,7 @@
             <!-- ML Anomaly -->
             <div class="col-md-3 mb-4">
                 <div class="card h-100">
-                    <div class="card-header">AI Detection</div>
+                    <div class="card-header">Detekcja AI</div>
                     <div class="card-body text-center" id="mlData">
                         <div class="spinner-border text-primary" role="status"></div>
                     </div>
@@ -84,7 +84,7 @@
             <!-- Topics -->
             <div class="col-md-3 mb-4">
                 <div class="card h-100">
-                    <div class="card-header">Trending Topics</div>
+                    <div class="card-header">Popularne Tematy</div>
                     <div class="card-body" id="topicData">
                         <div class="spinner-border text-primary" role="status"></div>
                     </div>
@@ -94,16 +94,16 @@
 
         <!-- Network Graph -->
         <div class="card mb-4">
-            <div class="card-header">User Interaction Network</div>
+            <div class="card-header">Sieć Interakcji</div>
             <div class="card-body">
-                <p class="small text-muted">Nodes: Users. Links: Mentions. <span class="text-danger">Red links</span> indicate duplicate messages.</p>
+                <p class="small text-muted">Węzły: Użytkownicy. Linie: Wzmianki. <span class="text-danger">Czerwone linie</span> oznaczają duplikaty.</p>
                 <div id="networkGraph" style="width: 100%; height: 500px; background: #000; border-radius: 8px;"></div>
             </div>
         </div>
 
         <!-- Word Cloud -->
         <div class="card mb-4">
-            <div class="card-header">Chat Word Cloud</div>
+            <div class="card-header">Chmura Słów</div>
             <div class="card-body text-center">
                 <img src="{{ url_for('main.api_wordcloud', channel_id=channel.id) }}" class="img-fluid rounded" alt="Word Cloud">
             </div>
@@ -112,10 +112,10 @@
         <!-- Chat Logs -->
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <span>Live Chat Logs (Latest 100)</span>
+                <span>Logi Czatu Na ŻYWO (Ostatnie 100)</span>
                 <div>
-                     <a href="{{ url_for('main.export_chat', channel_id=channel.id) }}" class="btn btn-sm btn-success"><i class="fas fa-file-csv"></i> Export CSV</a>
-                     <a href="{{ url_for('main.export_pdf', channel_id=channel.id) }}" class="btn btn-sm btn-danger"><i class="fas fa-file-pdf"></i> PDF Report</a>
+                     <a href="{{ url_for('main.export_chat', channel_id=channel.id) }}" class="btn btn-sm btn-success"><i class="fas fa-file-csv"></i> Eksport CSV</a>
+                     <a href="{{ url_for('main.export_pdf', channel_id=channel.id) }}" class="btn btn-sm btn-danger"><i class="fas fa-file-pdf"></i> Raport PDF</a>
                 </div>
             </div>
             <div class="card-body bg-black p-0">
@@ -129,18 +129,18 @@
     <!-- Stream History Tab -->
     <div class="tab-pane fade" id="history" role="tabpanel">
         <div class="card">
-            <div class="card-header">Past Broadcasts</div>
+            <div class="card-header">Poprzednie Transmisje</div>
             <div class="card-body">
                 <div class="table-responsive">
                     <table id="streamsTable" class="table table-dark table-striped w-100">
                         <thead>
                             <tr>
-                                <th>Started At</th>
-                                <th>Title</th>
-                                <th>Game</th>
-                                <th>Duration</th>
+                                <th>Rozpoczęto</th>
+                                <th>Tytuł</th>
+                                <th>Gra</th>
+                                <th>Czas Trwania</th>
                                 <th>Status</th>
-                                <th>Actions</th>
+                                <th>Akcje</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
@@ -150,7 +150,7 @@
         </div>
 
         <div class="card mt-4">
-             <div class="card-header">Bot Score History (7 Days)</div>
+             <div class="card-header">Historia Wskaźnika Bota (7 Dni)</div>
              <div class="card-body">
                  <div style="height: 300px;">
                     <canvas id="historyChart"></canvas>
@@ -219,14 +219,14 @@
                     data: {
                         labels: data.labels,
                         datasets: [{
-                            label: 'Viewers',
+                            label: 'Widzowie',
                             data: data.viewers,
                             borderColor: '#0053f1',
                             backgroundColor: 'rgba(0, 83, 241, 0.1)',
                             fill: true,
                             tension: 0.3
                         }, {
-                            label: 'Chatters',
+                            label: 'Czatujący',
                             data: data.chatters,
                             borderColor: '#ff6384',
                             tension: 0.3
@@ -267,25 +267,25 @@
             // Cards
             if (data.account_age) {
                 document.getElementById('accountAgeData').innerHTML = `
-                    <h3 class="fw-bold">${data.account_age.avg_age_days} days</h3>
-                    <p class="mb-0">Avg Age</p>
+                    <h3 class="fw-bold">${data.account_age.avg_age_days} dni</h3>
+                    <p class="mb-0">Śr. Wiek</p>
                     <hr>
                     <h4 class="${data.account_age.percent_new > 50 ? 'text-danger' : 'text-success'}">${data.account_age.percent_new}%</h4>
-                    <p class="small text-muted">New Accounts (<30d)</p>
+                    <p class="small text-muted">Nowe Konta (<30d)</p>
                 `;
             }
 
             if (data.sentiment || data.hive_mind) {
                 let html = '';
-                if(data.sentiment) html += `<p>Polarity: <strong>${data.sentiment.polarity.toFixed(2)}</strong></p>`;
-                if(data.hive_mind) html += `<p>Overlap: <strong class="${data.hive_mind.cross_channel_users > 5 ? 'text-danger' : 'text-success'}">${data.hive_mind.cross_channel_users} users</strong></p>`;
+                if(data.sentiment) html += `<p>Polaryzacja: <strong>${data.sentiment.polarity.toFixed(2)}</strong></p>`;
+                if(data.hive_mind) html += `<p>Wspólni: <strong class="${data.hive_mind.cross_channel_users > 5 ? 'text-danger' : 'text-success'}">${data.hive_mind.cross_channel_users} użytkowników</strong></p>`;
                 document.getElementById('advancedData').innerHTML = html;
             }
 
             if (data.ml_anomaly_score !== undefined) {
                 document.getElementById('mlData').innerHTML = `
                     <h3 class="${data.ml_anomaly_score > 20 ? 'text-danger' : 'text-success'}">${data.ml_anomaly_score.toFixed(1)}%</h3>
-                    <p>Anomaly Score</p>
+                    <p>Wskaźnik Anomalii</p>
                 `;
             }
 
@@ -326,7 +326,7 @@
                  data: {
                      labels: data.labels,
                      datasets: [{
-                         label: 'Bot Score',
+                         label: 'Wskaźnik Bota',
                          data: data.scores,
                          backgroundColor: '#dc3545'
                      }]
@@ -355,12 +355,12 @@
                      { data: 'duration' },
                      {
                          data: 'is_live',
-                         render: function(data) { return data ? '<span class="badge bg-danger">LIVE</span>' : '<span class="badge bg-secondary">Ended</span>'; }
+                         render: function(data) { return data ? '<span class="badge bg-danger">NA ŻYWO</span>' : '<span class="badge bg-secondary">Zakończono</span>'; }
                      },
                      {
                          data: 'id',
                          render: function(data) {
-                             return `<a href="/stream/${data}" class="btn btn-sm btn-primary">View</a>`;
+                             return `<a href="/stream/${data}" class="btn btn-sm btn-primary">Podgląd</a>`;
                          }
                      }
                  ],

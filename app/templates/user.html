@@ -2,29 +2,29 @@
 
 {% block content %}
 <div class="container">
-    <h2>User Profile: <span style="color: var(--primary-blue);">{{ username }}</span></h2>
+    <h2>Profil Użytkownika: <span style="color: var(--primary-blue);">{{ username }}</span></h2>
 
     <div class="grid-container">
         <!-- Summary Card -->
         <div class="card">
-            <h3>Summary</h3>
+            <h3>Podsumowanie</h3>
             <div class="stat-box">
-                <h4>Total Messages Tracked</h4>
+                <h4>Wszystkie Wiadomości</h4>
                 <span class="stat-value">{{ total_messages }}</span>
             </div>
             <div class="stat-box">
-                <h4>Channels Seen In</h4>
+                <h4>Widziany na Kanałach</h4>
                 <span class="stat-value">{{ channels_count }}</span>
             </div>
             <div class="stat-box">
-                <h4>Avg Sentiment</h4>
+                <h4>Śr. Sentyment</h4>
                 <span class="stat-value">{{ avg_sentiment }}</span>
             </div>
         </div>
 
         <!-- Activity Heatmap -->
         <div class="card">
-            <h3>Activity Heatmap (UTC)</h3>
+            <h3>Mapa Aktywności (UTC)</h3>
             <div class="chart-container">
                 <canvas id="activityChart"></canvas>
             </div>
@@ -33,13 +33,13 @@
 
     <!-- Message History -->
     <div class="card full-width" style="margin-top: 20px;">
-        <h3>Recent Activity</h3>
+        <h3>Ostatnia Aktywność</h3>
         <table>
             <thead>
                 <tr>
-                    <th>Time</th>
-                    <th>Channel</th>
-                    <th>Message</th>
+                    <th>Czas</th>
+                    <th>Kanał</th>
+                    <th>Wiadomość</th>
                 </tr>
             </thead>
             <tbody>
@@ -66,7 +66,7 @@
         data: {
             labels: Array.from({length: 24}, (_, i) => `${i}:00`),
             datasets: [{
-                label: 'Messages per Hour',
+                label: 'Wiadomości na godzinę',
                 data: activityData,
                 backgroundColor: '#0053f1',
                 borderRadius: 4

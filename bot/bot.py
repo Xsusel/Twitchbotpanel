@@ -37,7 +37,7 @@ class Bot(commands.Bot):
         try:
             with self.app.app_context():
                 channels = Channel.query.filter_by(is_active=True).all()
-                self.channels_to_monitor = [c.name for c in channels]
+                self.channels_to_monitor = [c.name.strip() for c in channels]
 
             if self.channels_to_monitor:
                 print(f"Monitoring channels: {self.channels_to_monitor}")
@@ -96,14 +96,24 @@ class Bot(commands.Bot):
                 # Reload channels
                 with self.app.app_context():
                      channels = Channel.query.filter_by(is_active=True).all()
-                     current_channels = [c.name for c in channels]
+                     current_channels = [c.name.strip() for c in channels]
 
-                # Join new channels
+                # Identify changes
                 new_channels = list(set(current_channels) - set(self.channels_to_monitor))
+                removed_channels = list(set(self.channels_to_monitor) - set(current_channels))
+
                 if new_channels:
                     print(f"Joining new channels: {new_channels}")
                     await self.join_channels(new_channels)
-                    self.channels_to_monitor = current_channels
+
+                if removed_channels:
+                    print(f"Leaving channels: {removed_channels}")
+                    try:
+                        await self.part_channels(removed_channels)
+                    except Exception as e:
+                        print(f"Error leaving channels: {e}")
+
+                self.channels_to_monitor = current_channels
 
                 if self.channels_to_monitor:
                     stream_data = {} # name -> {viewer_count, title, game_name}
