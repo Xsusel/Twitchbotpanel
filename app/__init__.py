@@ -102,4 +102,7 @@ def create_app(config_class=Config):
     from app.auth import auth
     app.register_blueprint(auth, url_prefix='/auth')
 
+    from app.utils import to_warsaw_time
+    app.jinja_env.filters['to_warsaw_time'] = to_warsaw_time
+
     return app

@@ -4,7 +4,7 @@
 <div class="row mb-3">
     <div class="col-12">
         <a href="{{ url_for('main.channel_detail', channel_id=stream.channel_id) }}" class="btn btn-secondary mb-3"><i class="fas fa-arrow-left"></i> Powrót do Kanału</a>
-        <h2 class="text-primary">Archiwum Transmisji: {{ stream.started_at.strftime('%Y-%m-%d %H:%M') }}</h2>
+        <h2 class="text-primary">Archiwum Transmisji: {{ stream.started_at | to_warsaw_time('%Y-%m-%d %H:%M') }}</h2>
         <p class="lead">{{ stream.title }} ({{ stream.game_name }})</p>
     </div>
 </div>
@@ -49,18 +49,18 @@
 
 <div class="row">
     <!-- Wiek Kont -->
-    <div class="col-md-4 mb-4">
+    <div class="col-md-3 mb-4">
         <div class="card h-100">
             <div class="card-header">Wiek Kont Widzów</div>
             <div class="card-body">
-                <div style="height: 300px;">
+                <div style="height: 250px;">
                     <canvas id="ageChart"></canvas>
                 </div>
             </div>
         </div>
     </div>
     <!-- Patterns -->
-    <div class="col-md-4 mb-4">
+    <div class="col-md-3 mb-4">
          <div class="card h-100 border-light">
              <div class="card-header">Wzorce Nicków (Entropia)</div>
              <div class="card-body">
@@ -73,12 +73,60 @@
          </div>
     </div>
     <!-- Clusters -->
-    <div class="col-md-4 mb-4">
+    <div class="col-md-3 mb-4">
          <div class="card h-100 border-secondary">
-             <div class="card-header">Klastry Spamu (Bubble Chart)</div>
+             <div class="card-header">Klastry Spamu</div>
              <div class="card-body bg-dark">
-                 <div style="height: 300px;">
+                 <div style="height: 250px;">
                      <canvas id="clustersChart"></canvas>
+                 </div>
+             </div>
+         </div>
+    </div>
+    <!-- Suspicion Distribution (NEW) -->
+    <div class="col-md-3 mb-4">
+         <div class="card h-100 border-danger">
+             <div class="card-header">Rozkład Podejrzliwości</div>
+             <div class="card-body">
+                 <div style="height: 250px;">
+                     <canvas id="suspicionDistChart"></canvas>
+                 </div>
+             </div>
+         </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Session Durations (NEW) -->
+    <div class="col-md-4 mb-4">
+         <div class="card h-100">
+             <div class="card-header">Czas Trwania Sesji</div>
+             <div class="card-body">
+                 <div style="height: 250px;">
+                     <canvas id="sessionDurationChart"></canvas>
+                 </div>
+             </div>
+         </div>
+    </div>
+     <!-- New Chatters (NEW) -->
+    <div class="col-md-4 mb-4">
+         <div class="card h-100">
+             <div class="card-header">Nowi Użytkownicy (%)</div>
+             <div class="card-body">
+                 <div style="height: 250px;">
+                     <canvas id="newChattersChart"></canvas>
+                 </div>
+             </div>
+         </div>
+    </div>
+    <!-- Hive Mind (NEW) -->
+    <div class="col-md-4 mb-4">
+         <div class="card h-100 border-warning">
+             <div class="card-header">Hive Mind (Synchronizacja)</div>
+             <div class="card-body bg-dark">
+                 <div style="height: 250px; overflow-y: auto;" id="hiveMindList" class="text-monospace small">
+                    <!-- List populated by JS -->
+                    <div class="text-center text-muted p-4">Brak danych</div>
                  </div>
              </div>
          </div>
@@ -193,6 +241,12 @@
     const patternsCtx = document.getElementById('patternsChart').getContext('2d');
     const threatCtx = document.getElementById('threatGauge').getContext('2d');
     const clustersCtx = document.getElementById('clustersChart').getContext('2d');
+
+    // New Charts
+    const suspicionDistCtx = document.getElementById('suspicionDistChart').getContext('2d');
+    const sessionDurationCtx = document.getElementById('sessionDurationChart').getContext('2d');
+    const newChattersCtx = document.getElementById('newChattersChart').getContext('2d');
+
     let suspiciousTable;
 
     async function loadData() {
@@ -509,6 +563,101 @@
                 }
             }
         });
+
+        // --- NEW CHARTS IMPLEMENTATION ---
+
+        // 1. Suspicion Distribution
+        const susDistRes = await fetch(`/api/stream/${streamId}/suspicion_distribution`);
+        const susDistData = await susDistRes.json();
+
+        new Chart(suspicionDistCtx, {
+            type: 'bar',
+            data: {
+                labels: Object.keys(susDistData),
+                datasets: [{
+                    label: 'Liczba Widzów',
+                    data: Object.values(susDistData),
+                    backgroundColor: [
+                        '#28a745', // 0-20%
+                        '#ffc107', // 21-50%
+                        '#fd7e14', // 51-80%
+                        '#dc3545'  // 81-100%
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } }
+            }
+        });
+
+        // 2. Session Durations
+        const sessRes = await fetch(`/api/stream/${streamId}/session_durations`);
+        const sessData = await sessRes.json();
+
+        new Chart(sessionDurationCtx, {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(sessData),
+                datasets: [{
+                    data: Object.values(sessData),
+                    backgroundColor: ['#dc3545', '#fd7e14', '#ffc107', '#17a2b8', '#28a745']
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+
+        // 3. New Chatters Ratio
+        const newChatRes = await fetch(`/api/stream/${streamId}/new_chatters`);
+        const newChatData = await newChatRes.json();
+
+        new Chart(newChattersCtx, {
+            type: 'line',
+            data: {
+                labels: newChatData.times,
+                datasets: [{
+                    label: '% Nowych Użytkowników',
+                    data: newChatData.ratios,
+                    borderColor: '#0dcaf0',
+                    backgroundColor: 'rgba(13, 202, 240, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { title: { display: true, text: 'Minuty od startu' } },
+                    y: { beginAtZero: true, max: 100 }
+                }
+            }
+        });
+
+        // 4. Hive Mind List
+        const hiveRes = await fetch(`/api/stream/${streamId}/hive_mind`);
+        const hiveData = await hiveRes.json();
+        const hiveContainer = document.getElementById('hiveMindList');
+
+        if (hiveData.spikes && hiveData.spikes.length > 0) {
+            let html = '<ul class="list-group list-group-flush bg-transparent">';
+            hiveData.spikes.forEach(s => {
+                // Convert ISO timestamp to time string, maybe handle locally or just split T
+                const timeStr = s.timestamp.split('T')[1].split('.')[0];
+                html += `
+                    <li class="list-group-item bg-transparent text-white border-secondary">
+                        <span class="text-danger fw-bold">${timeStr}</span>:
+                        <span class="badge bg-warning text-dark">${s.count} userów</span>
+                        <div class="small text-muted mt-1">${s.users.join(', ')}...</div>
+                    </li>
+                `;
+            });
+            html += '</ul>';
+            hiveContainer.innerHTML = html;
+        } else {
+            hiveContainer.innerHTML = '<div class="text-success p-3 text-center"><i class="fas fa-check"></i> Brak wykrytej synchronizacji</div>';
+        }
 
         // Suspicious Viewers
         const susRes = await fetch(`/api/stream/${streamId}/suspicious`);

@@ -4,8 +4,9 @@ from app.auth import login_required
 from app.tasks import analyze_channel, delete_channel_task
 from app.analysis import generate_wordcloud, analyze_sentiment, analyze_viewer_growth, extract_trending_topics
 from app.network_analysis import generate_user_network
-from app.analytics_extended import calculate_join_part_velocity, find_message_clusters, analyze_lurkers, generate_chat_heatmap, check_cross_stream_zombies, get_account_age_distribution, get_follower_velocity, analyze_username_patterns, get_global_threat_level, generate_stream_network
+from app.analytics_extended import calculate_join_part_velocity, find_message_clusters, analyze_lurkers, generate_chat_heatmap, check_cross_stream_zombies, get_account_age_distribution, get_follower_velocity, analyze_username_patterns, get_global_threat_level, generate_stream_network, get_suspicion_distribution, analyze_temporal_synchronization, analyze_new_chatters_over_time, analyze_session_durations
 from app.reports import generate_pdf_report
+from app.utils import to_warsaw_time
 from datetime import datetime, timedelta
 import subprocess
 import sys
@@ -67,7 +68,7 @@ def api_streams_list(channel_id):
             'id': s.id,
             'title': s.title,
             'game_name': s.game_name,
-            'started_at': s.started_at.strftime('%Y-%m-%d %H:%M'),
+            'started_at': to_warsaw_time(s.started_at, '%Y-%m-%d %H:%M'),
             'duration': duration,
             'is_live': s.is_live
         })
@@ -84,7 +85,7 @@ def stream_detail(stream_id):
 def api_stream_stats(stream_id):
     stats = StreamStats.query.filter_by(stream_id=stream_id).order_by(StreamStats.timestamp.asc()).all()
     data = {
-        'labels': [s.timestamp.strftime('%H:%M') for s in stats],
+        'labels': [to_warsaw_time(s.timestamp, '%H:%M') for s in stats],
         'viewers': [s.viewer_count for s in stats],
         'chatters': [s.chatter_count for s in stats],
         'active_chatters': [s.active_chatter_count for s in stats]
@@ -102,7 +103,7 @@ def api_stream_logs(stream_id):
         logs.append({
             'username': m.username,
             'message': m.message,
-            'timestamp': m.timestamp.strftime('%H:%M:%S'),
+            'timestamp': to_warsaw_time(m.timestamp, '%H:%M:%S'),
             'badges': m.badges
         })
     return jsonify(logs)
@@ -146,7 +147,7 @@ def api_channel_stats(channel_id):
         stats = StreamStats.query.filter_by(channel_id=channel_id).filter(StreamStats.timestamp >= since).order_by(StreamStats.timestamp.asc()).all()
 
     data = {
-        'labels': [s.timestamp.strftime('%H:%M') for s in stats],
+        'labels': [to_warsaw_time(s.timestamp, '%H:%M') for s in stats],
         'viewers': [s.viewer_count for s in stats],
         'chatters': [s.chatter_count for s in stats],
         'active_chatters': [s.active_chatter_count for s in stats]
@@ -185,7 +186,7 @@ def api_channel_logs(channel_id):
         logs.append({
             'username': m.username,
             'message': m.message,
-            'timestamp': m.timestamp.strftime('%H:%M:%S'),
+            'timestamp': to_warsaw_time(m.timestamp, '%H:%M:%S'),
             'badges': m.badges,
             'suspicious': False
         })
@@ -266,7 +267,7 @@ def api_history(channel_id):
     analyses = AnalysisResult.query.filter_by(channel_id=channel_id).filter(AnalysisResult.timestamp >= since).order_by(AnalysisResult.timestamp.asc()).all()
 
     data = {
-        'labels': [a.timestamp.strftime('%Y-%m-%d %H:%M') for a in analyses],
+        'labels': [to_warsaw_time(a.timestamp, '%Y-%m-%d %H:%M') for a in analyses],
         'scores': [a.bot_score for a in analyses]
     }
     return jsonify(data)
@@ -293,7 +294,7 @@ def api_viewers(channel_id):
             'is_subscriber': v.is_subscriber,
             'sub_tier': v.sub_tier,
             'is_mod': v.is_mod,
-            'last_seen': v.last_seen.strftime('%Y-%m-%d %H:%M:%S'),
+            'last_seen': to_warsaw_time(v.last_seen, '%Y-%m-%d %H:%M:%S'),
             'color': v.color,
             'follow_duration': v.follow_duration
         })
@@ -357,6 +358,37 @@ def api_stream_threat_level(stream_id):
 @login_required
 def api_stream_network(stream_id):
     data = generate_stream_network(stream_id)
+    return jsonify(data)
+
+@main.route('/api/stream/<int:stream_id>/suspicion_distribution')
+@login_required
+def api_stream_suspicion_distribution(stream_id):
+    data = get_suspicion_distribution(stream_id)
+    return jsonify(data)
+
+@main.route('/api/stream/<int:stream_id>/hive_mind')
+@login_required
+def api_stream_hive_mind(stream_id):
+    data = analyze_temporal_synchronization(stream_id)
+    # Convert timestamps to Warsaw time string for consistency with frontend display
+    for item in data.get('spikes', []):
+        try:
+             dt = datetime.fromisoformat(item['timestamp'])
+             item['timestamp'] = to_warsaw_time(dt, '%Y-%m-%dT%H:%M:%S')
+        except:
+             pass
+    return jsonify(data)
+
+@main.route('/api/stream/<int:stream_id>/new_chatters')
+@login_required
+def api_stream_new_chatters(stream_id):
+    data = analyze_new_chatters_over_time(stream_id)
+    return jsonify(data)
+
+@main.route('/api/stream/<int:stream_id>/session_durations')
+@login_required
+def api_stream_session_durations(stream_id):
+    data = analyze_session_durations(stream_id)
     return jsonify(data)
 
 @main.route('/add_channel', methods=['POST'])
