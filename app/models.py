@@ -82,9 +82,9 @@ class Stream(db.Model):
     ended_at = db.Column(db.DateTime, nullable=True)
     is_live = db.Column(db.Boolean, default=True)
 
-    messages = db.relationship('ChatMessage', backref='stream', lazy='dynamic')
-    stats = db.relationship('StreamStats', backref='stream', lazy='dynamic')
-    viewer_stats = db.relationship('StreamViewerStats', backref='stream', lazy='dynamic')
+    messages = db.relationship('ChatMessage', backref='stream', lazy='dynamic', cascade="all, delete-orphan")
+    stats = db.relationship('StreamStats', backref='stream', lazy='dynamic', cascade="all, delete-orphan")
+    viewer_stats = db.relationship('StreamViewerStats', backref='stream', lazy='dynamic', cascade="all, delete-orphan")
 
     def __repr__(self):
         return f'<Stream {self.id} {self.channel_id}>'
