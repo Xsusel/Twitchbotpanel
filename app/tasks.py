@@ -1,8 +1,9 @@
 from app import celery, db
-from app.models import Channel, ChatMessage, StreamStats, AnalysisResult, Stream
-from app.analysis import calculate_bot_score, get_language_distribution, analyze_sentiment
+from app.models import Channel, ChatMessage, StreamStats, AnalysisResult, Stream, StreamViewerStats, Viewer
+from app.analysis import calculate_bot_score, get_language_distribution, analyze_sentiment, analyze_viewer_growth
 from datetime import datetime, timedelta
 import requests
+import re
 import json
 from config import Config
 from sqlalchemy import func
@@ -156,11 +157,28 @@ def analyze_channel(channel_id):
         score = calculate_bot_score(stats.viewer_count, stats.chatter_count, messages)
         langs = get_language_distribution(messages)
         sentiment = analyze_sentiment(messages)
+        growth_analysis = analyze_viewer_growth(stream_id)
 
         # Account Age Analysis (Sample top 50 unique users)
         current_users = list(set([m.username for m in messages]))
         unique_users_sample = current_users[:50]
         users_data = get_twitch_users_info(unique_users_sample)
+
+        # Update Viewer models with account_created_at
+        if users_data:
+            for user_info in users_data:
+                u_login = user_info.get("login")
+                u_created = user_info.get("created_at")
+                if u_login and u_created:
+                    try:
+                        created_dt = datetime.strptime(u_created.replace("Z", ""), "%Y-%m-%dT%H:%M:%S")
+                        viewer = Viewer.query.filter_by(channel_id=channel_id, username=u_login).first()
+                        if viewer:
+                            viewer.account_created_at = created_dt
+                    except ValueError:
+                        pass
+            db.session.commit()
+
         age_stats = calculate_account_age_stats(users_data)
 
         # Adjust score based on age stats
@@ -169,9 +187,14 @@ def analyze_channel(channel_id):
         if age_stats.get("avg_age_days", 100) < 7: # Very fresh accounts on avg
             score += 20
 
+        # Growth Spikes
+        if growth_analysis.get('has_spike', False):
+            score += 15
+
         # Hive Mind Check (Cross-Channel)
         # Find users in this batch who have been active in OTHER channels recently
         hive_mind_stats = {"cross_channel_users": 0, "total_tracked_users": len(current_users)}
+        suspicious_hive_users = []
         if current_users:
             try:
                 # Users active in last 10 mins in any channel
@@ -183,11 +206,65 @@ def analyze_channel(channel_id):
 
                 cross_channel_users_count = len(recent_active_users)
                 hive_mind_stats["cross_channel_users"] = cross_channel_users_count
+                suspicious_hive_users = [u[0] for u in recent_active_users]
 
                 if cross_channel_users_count > 5: # If more than 5 users are hopping channels simultaneously
                     score += 10
             except Exception as e:
                 print(f"Hive mind query error: {e}")
+
+        # --- Detailed Suspicion Analysis for Stream Viewers ---
+        if stream_id:
+             stream_viewers = StreamViewerStats.query.filter_by(stream_id=stream_id).all()
+
+             # Name patterns regex (e.g., User12345 or multiple digits at end)
+             name_pattern = re.compile(r'[a-zA-Z]+[0-9]{3,}$')
+
+             for sv in stream_viewers:
+                 v_score = 0
+                 reasons = []
+                 viewer = sv.viewer
+
+                 # 1. Name Pattern
+                 if name_pattern.match(viewer.username):
+                     v_score += 30
+                     reasons.append("Suspicious Name Pattern")
+
+                 # 2. Hive Mind Participation
+                 if viewer.username in suspicious_hive_users:
+                     v_score += 40
+                     reasons.append("Hive Mind Activity")
+
+                 # 3. New Account (if we have data)
+                 # We fetched limited sample earlier, but maybe we have it in DB?
+                 # If we just fetched it, we might want to update Viewer model too.
+                 # For now, let's rely on what we have.
+                 if viewer.account_created_at:
+                      age = (datetime.utcnow() - viewer.account_created_at).days
+                      if age < 7:
+                          v_score += 30
+                          reasons.append("Brand New Account")
+
+                 # 4. Spammy behavior (High message count in short time?)
+                 # Simple check: messages per minute of presence
+                 duration_mins = (sv.last_seen - sv.first_seen).total_seconds() / 60
+                 if duration_mins > 0:
+                     rate = sv.message_count / duration_mins
+                     if rate > 20: # > 20 msgs/min
+                         v_score += 20
+                         reasons.append("High Message Rate")
+
+                 # Update
+                 sv.suspicion_score = v_score
+                 sv.is_suspicious = v_score > 50
+
+                 # Update Global Viewer Score (Cumulative)
+                 # We add to existing score or max it? Let's max it for now to flag them permanently
+                 if v_score > viewer.suspicion_score:
+                     viewer.suspicion_score = v_score
+                     viewer.suspicion_reason = ", ".join(reasons)
+
+             db.session.commit()
 
         # ML Anomaly Detection
         ml_score, anomaly_indices = ml_detector.detect_anomalies(messages)
@@ -219,7 +296,8 @@ def analyze_channel(channel_id):
                 "sentiment": sentiment,
                 "hive_mind": hive_mind_stats,
                 "ml_anomaly_score": ml_score,
-                "topics": topics
+                "topics": topics,
+                "growth_analysis": growth_analysis
             }
         )
         db.session.add(result)

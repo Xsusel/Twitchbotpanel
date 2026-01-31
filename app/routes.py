@@ -1,8 +1,8 @@
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify, flash, send_file, Response
-from app.models import db, Channel, ChatMessage, StreamStats, AnalysisResult, Stream, SystemConfig, Viewer
+from app.models import db, Channel, ChatMessage, StreamStats, AnalysisResult, Stream, SystemConfig, Viewer, StreamViewerStats
 from app.auth import login_required
 from app.tasks import analyze_channel
-from app.analysis import generate_wordcloud, analyze_sentiment
+from app.analysis import generate_wordcloud, analyze_sentiment, analyze_viewer_growth
 from app.network_analysis import generate_user_network
 from app.reports import generate_pdf_report
 from datetime import datetime, timedelta
@@ -102,6 +102,29 @@ def api_stream_logs(stream_id):
             'badges': m.badges
         })
     return jsonify(logs)
+
+@main.route('/api/stream/<int:stream_id>/suspicious')
+@login_required
+def api_stream_suspicious(stream_id):
+    # Get all suspicious viewers for this stream
+    stats = StreamViewerStats.query.filter_by(stream_id=stream_id, is_suspicious=True).order_by(StreamViewerStats.suspicion_score.desc()).all()
+    data = []
+    for s in stats:
+        data.append({
+            'username': s.viewer.username,
+            'score': s.suspicion_score,
+            'reasons': s.viewer.suspicion_reason,
+            'message_count': s.message_count,
+            'first_seen': s.first_seen.isoformat(),
+            'last_seen': s.last_seen.isoformat()
+        })
+    return jsonify(data)
+
+@main.route('/api/stream/<int:stream_id>/growth')
+@login_required
+def api_stream_growth(stream_id):
+    analysis = analyze_viewer_growth(stream_id)
+    return jsonify(analysis)
 
 @main.route('/api/stats/<int:channel_id>')
 @login_required

@@ -6,6 +6,7 @@ from textblob import TextBlob
 from wordcloud import WordCloud
 import io
 import base64
+from app.models import StreamStats
 
 def calculate_ratio(viewer_count, chatter_count):
     if viewer_count == 0:
@@ -272,3 +273,49 @@ def calculate_bot_score(viewer_count, chatter_count, messages):
         score += 20
 
     return min(score, 100.0)
+
+def analyze_viewer_growth(stream_id):
+    """
+    Analyzes viewer count growth rate to detect unnatural spikes.
+    Returns dict with growth metrics.
+    """
+    if not stream_id:
+        return {}
+
+    # Get stats for stream sorted by time
+    stats = StreamStats.query.filter_by(stream_id=stream_id).order_by(StreamStats.timestamp.asc()).all()
+    if len(stats) < 2:
+        return {'has_spike': False}
+
+    # Calculate derivative (viewers per minute)
+    spikes = []
+    max_growth_rate = 0
+
+    for i in range(1, len(stats)):
+        prev = stats[i-1]
+        curr = stats[i]
+
+        time_diff = (curr.timestamp - prev.timestamp).total_seconds() / 60
+        if time_diff == 0: continue
+
+        viewer_diff = curr.viewer_count - prev.viewer_count
+        rate = viewer_diff / time_diff # viewers per minute
+
+        if rate > max_growth_rate:
+            max_growth_rate = rate
+
+        # Threshold: > 100 viewers/min or > 50% increase in 1 min is suspicious
+        if rate > 100 or (prev.viewer_count > 0 and (viewer_diff / prev.viewer_count) > 0.5):
+            spikes.append({
+                'time': curr.timestamp.isoformat(),
+                'rate': rate,
+                'from': prev.viewer_count,
+                'to': curr.viewer_count
+            })
+
+    return {
+        'has_spike': len(spikes) > 0,
+        'spike_count': len(spikes),
+        'max_growth_rate': max_growth_rate,
+        'spikes': spikes
+    }

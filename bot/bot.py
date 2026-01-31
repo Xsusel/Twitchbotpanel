@@ -9,7 +9,7 @@ sys.path.append(os.getcwd())
 
 from twitchio.ext import commands
 from app import create_app
-from app.models import db, Channel, ChatMessage, StreamStats, Stream, SystemConfig, Viewer
+from app.models import db, Channel, ChatMessage, StreamStats, Stream, SystemConfig, Viewer, StreamViewerStats
 from app.tasks import analyze_channel, cleanup_old_data
 from config import Config
 from flask_socketio import SocketIO
@@ -107,13 +107,21 @@ class Bot(commands.Bot):
                     if viewer:
                         viewer.last_seen = timestamp
                         viewer.message_count += 1
-                        viewer.is_subscriber = is_subscriber or viewer.is_subscriber # Keep true if ever sub? Or update strictly? Update strictly is better for current status.
-                        # Actually, keeping it strictly current is better for "Current Status".
-                        # But wait, if they speak once and we capture "True", and then next time "False" (expired), we want current.
                         viewer.is_subscriber = bool(is_subscriber)
                         viewer.is_mod = bool(is_mod)
                         if color:
                             viewer.color = color
+
+                        # Handle Nickname History
+                        # If twitch_id matches but username is different, add old name to history
+                        if twitch_id and viewer.twitch_id and viewer.twitch_id == twitch_id:
+                            if viewer.username != username:
+                                old_names = viewer.nick_history or []
+                                if viewer.username not in old_names:
+                                    old_names.append(viewer.username)
+                                viewer.nick_history = old_names
+                                viewer.username = username # Update to new name
+
                         if twitch_id:
                             viewer.twitch_id = twitch_id
                     else:
@@ -129,6 +137,23 @@ class Bot(commands.Bot):
                             color=color
                         )
                         db.session.add(viewer)
+                        db.session.commit() # Commit to get ID
+
+                    # 3. Update StreamViewerStats (if stream is live)
+                    if stream_id:
+                         sv_stats = StreamViewerStats.query.filter_by(stream_id=stream_id, viewer_id=viewer.id).first()
+                         if sv_stats:
+                             sv_stats.message_count += 1
+                             sv_stats.last_seen = timestamp
+                         else:
+                             sv_stats = StreamViewerStats(
+                                 stream_id=stream_id,
+                                 viewer_id=viewer.id,
+                                 message_count=1,
+                                 first_seen=timestamp,
+                                 last_seen=timestamp
+                             )
+                             db.session.add(sv_stats)
 
                     db.session.commit()
 
@@ -257,17 +282,15 @@ class Bot(commands.Bot):
 
                     viewer_count = data['viewer_count'] if is_live else 0
 
-                    # Get chatter count from TMI (only if live or check anyway?)
+                    # Get chatter count (Use TwitchIO cache or 0 if unavailable)
                     chatter_count = 0
                     if is_live:
                         try:
-                            tmi_url = f"https://tmi.twitch.tv/group/user/{name.lower()}/chatters"
-                            resp = requests.get(tmi_url, timeout=5)
-                            if resp.status_code == 200:
-                                data_tmi = resp.json()
-                                chatter_count = data_tmi.get('chatter_count', 0)
-                        except Exception:
-                            pass # Ignore TMI errors
+                            channel = self.get_channel(name)
+                            if channel and channel.chatters:
+                                chatter_count = len(channel.chatters)
+                        except Exception as e:
+                            print(f"Error getting chatter count: {e}")
 
                     stats = StreamStats(
                         channel_id=c.id,
