@@ -9,6 +9,8 @@ WorkingDirectory=/opt/xsus_sentinel
 Environment="PATH=/opt/xsus_sentinel/venv/bin:/usr/local/bin:/usr/bin:/bin"
 EnvironmentFile=/opt/xsus_sentinel/.env
 ExecStart=/opt/xsus_sentinel/venv/bin/gunicorn -k eventlet -w 1 -b 127.0.0.1:8000 "app:create_app()"
+Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
