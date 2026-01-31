@@ -29,17 +29,30 @@ def migrate():
                 # 1. Create streams table
                 if not inspector.has_table("streams"):
                     print("Creating 'streams' table...")
-                    conn.execute(text("""
-                        CREATE TABLE streams (
-                            id SERIAL PRIMARY KEY,
-                            channel_id INTEGER NOT NULL REFERENCES channels(id),
-                            title VARCHAR(255),
-                            game_name VARCHAR(128),
-                            started_at TIMESTAMP WITHOUT TIME ZONE DEFAULT (now() AT TIME ZONE 'utc'),
-                            ended_at TIMESTAMP WITHOUT TIME ZONE,
-                            is_live BOOLEAN DEFAULT TRUE
-                        );
-                    """))
+                    if engine.dialect.name == 'postgresql':
+                        conn.execute(text("""
+                            CREATE TABLE streams (
+                                id SERIAL PRIMARY KEY,
+                                channel_id INTEGER NOT NULL REFERENCES channels(id),
+                                title VARCHAR(255),
+                                game_name VARCHAR(128),
+                                started_at TIMESTAMP WITHOUT TIME ZONE DEFAULT (now() AT TIME ZONE 'utc'),
+                                ended_at TIMESTAMP WITHOUT TIME ZONE,
+                                is_live BOOLEAN DEFAULT TRUE
+                            );
+                        """))
+                    else:
+                        conn.execute(text("""
+                            CREATE TABLE streams (
+                                id INTEGER PRIMARY KEY,
+                                channel_id INTEGER NOT NULL REFERENCES channels(id),
+                                title VARCHAR(255),
+                                game_name VARCHAR(128),
+                                started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                ended_at TIMESTAMP,
+                                is_live BOOLEAN DEFAULT TRUE
+                            );
+                        """))
                     print("'streams' table created.")
 
                 # 2. Add columns
@@ -66,6 +79,71 @@ def migrate():
                     if "follow_duration" not in cols:
                         print("Adding 'follow_duration' to 'viewers'...")
                         conn.execute(text("ALTER TABLE viewers ADD COLUMN follow_duration INTEGER;"))
+
+                    # New columns for viewers
+                    if "twitch_id" not in cols:
+                        print("Adding 'twitch_id' to 'viewers'...")
+                        conn.execute(text("ALTER TABLE viewers ADD COLUMN twitch_id VARCHAR(64);"))
+                    if "account_created_at" not in cols:
+                        print("Adding 'account_created_at' to 'viewers'...")
+                        conn.execute(text("ALTER TABLE viewers ADD COLUMN account_created_at TIMESTAMP WITHOUT TIME ZONE;"))
+                    if "suspicion_score" not in cols:
+                        print("Adding 'suspicion_score' to 'viewers'...")
+                        conn.execute(text("ALTER TABLE viewers ADD COLUMN suspicion_score INTEGER DEFAULT 0;"))
+                    if "suspicion_reason" not in cols:
+                        print("Adding 'suspicion_reason' to 'viewers'...")
+                        conn.execute(text("ALTER TABLE viewers ADD COLUMN suspicion_reason VARCHAR(255);"))
+                    if "nick_history" not in cols:
+                        print("Adding 'nick_history' to 'viewers'...")
+                        # Handle dialect for JSON
+                        if engine.dialect.name == 'postgresql':
+                            conn.execute(text("ALTER TABLE viewers ADD COLUMN nick_history JSONB DEFAULT '[]'::jsonb;"))
+                        else:
+                            conn.execute(text("ALTER TABLE viewers ADD COLUMN nick_history JSON DEFAULT '[]';"))
+
+                if inspector.has_table("chat_messages"):
+                    cols = [c['name'] for c in inspector.get_columns("chat_messages")]
+                    if "meta" not in cols:
+                        print("Adding 'meta' to 'chat_messages'...")
+                        if engine.dialect.name == 'postgresql':
+                            conn.execute(text("ALTER TABLE chat_messages ADD COLUMN meta JSONB DEFAULT '{}'::jsonb;"))
+                        else:
+                            conn.execute(text("ALTER TABLE chat_messages ADD COLUMN meta JSON DEFAULT '{}';"))
+
+                # Create stream_viewer_stats table
+                if not inspector.has_table("stream_viewer_stats"):
+                    print("Creating 'stream_viewer_stats' table...")
+                    # Common SQL for both mostly, but SERIAL vs AUTOINCREMENT
+                    if engine.dialect.name == 'postgresql':
+                        conn.execute(text("""
+                            CREATE TABLE stream_viewer_stats (
+                                id SERIAL PRIMARY KEY,
+                                stream_id INTEGER NOT NULL REFERENCES streams(id),
+                                viewer_id INTEGER NOT NULL REFERENCES viewers(id),
+                                message_count INTEGER DEFAULT 0,
+                                first_seen TIMESTAMP WITHOUT TIME ZONE DEFAULT (now() AT TIME ZONE 'utc'),
+                                last_seen TIMESTAMP WITHOUT TIME ZONE DEFAULT (now() AT TIME ZONE 'utc'),
+                                suspicion_score INTEGER DEFAULT 0,
+                                is_suspicious BOOLEAN DEFAULT FALSE,
+                                CONSTRAINT _stream_viewer_uc UNIQUE (stream_id, viewer_id)
+                            );
+                        """))
+                    else:
+                        # SQLite
+                        conn.execute(text("""
+                            CREATE TABLE stream_viewer_stats (
+                                id INTEGER PRIMARY KEY,
+                                stream_id INTEGER NOT NULL REFERENCES streams(id),
+                                viewer_id INTEGER NOT NULL REFERENCES viewers(id),
+                                message_count INTEGER DEFAULT 0,
+                                first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                suspicion_score INTEGER DEFAULT 0,
+                                is_suspicious BOOLEAN DEFAULT FALSE,
+                                UNIQUE(stream_id, viewer_id)
+                            );
+                        """))
+                    print("'stream_viewer_stats' table created.")
 
                 conn.commit()
                 print("Migration complete.")
