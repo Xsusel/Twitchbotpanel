@@ -9,7 +9,7 @@ sys.path.append(os.getcwd())
 
 from twitchio.ext import commands
 from app import create_app
-from app.models import db, Channel, ChatMessage, StreamStats, Stream, SystemConfig
+from app.models import db, Channel, ChatMessage, StreamStats, Stream, SystemConfig, Viewer
 from app.tasks import analyze_channel, cleanup_old_data
 from config import Config
 from flask_socketio import SocketIO
@@ -64,10 +64,24 @@ class Bot(commands.Bot):
             return
 
         # Run DB operation in thread
-        await asyncio.to_thread(self.save_message, message.channel.name, message.author.name, message.content, message.timestamp, message.author.badges)
+        await asyncio.to_thread(self.save_message, message)
 
-    def save_message(self, channel_name, username, content, timestamp, badges):
+    def save_message(self, message):
         try:
+            channel_name = message.channel.name
+            username = message.author.name
+            content = message.content
+            timestamp = message.timestamp
+            badges = message.author.badges
+
+            # Extract additional viewer info
+            author = message.author
+            color = str(author.color) if author.color else None
+            is_mod = author.is_mod
+            is_subscriber = author.is_subscriber
+            # Handle user ID (TwitchIO 2.x 'id' field for user)
+            twitch_id = str(author.id) if hasattr(author, 'id') else None
+
             with self.app.app_context():
                 channel = Channel.query.filter_by(name=channel_name).first()
                 if channel:
@@ -75,6 +89,7 @@ class Bot(commands.Bot):
                     stream = Stream.query.filter_by(channel_id=channel.id, is_live=True).order_by(Stream.started_at.desc()).first()
                     stream_id = stream.id if stream else None
 
+                    # 1. Save Message
                     new_msg = ChatMessage(
                         channel_id=channel.id,
                         stream_id=stream_id,
@@ -85,6 +100,36 @@ class Bot(commands.Bot):
                         meta={}
                     )
                     db.session.add(new_msg)
+
+                    # 2. Update/Create Viewer
+                    # Try to find existing viewer by username + channel
+                    viewer = Viewer.query.filter_by(channel_id=channel.id, username=username).first()
+                    if viewer:
+                        viewer.last_seen = timestamp
+                        viewer.message_count += 1
+                        viewer.is_subscriber = is_subscriber or viewer.is_subscriber # Keep true if ever sub? Or update strictly? Update strictly is better for current status.
+                        # Actually, keeping it strictly current is better for "Current Status".
+                        # But wait, if they speak once and we capture "True", and then next time "False" (expired), we want current.
+                        viewer.is_subscriber = bool(is_subscriber)
+                        viewer.is_mod = bool(is_mod)
+                        if color:
+                            viewer.color = color
+                        if twitch_id:
+                            viewer.twitch_id = twitch_id
+                    else:
+                        viewer = Viewer(
+                            channel_id=channel.id,
+                            username=username,
+                            twitch_id=twitch_id,
+                            first_seen=timestamp,
+                            last_seen=timestamp,
+                            message_count=1,
+                            is_subscriber=bool(is_subscriber),
+                            is_mod=bool(is_mod),
+                            color=color
+                        )
+                        db.session.add(viewer)
+
                     db.session.commit()
 
                     # Emit real-time event

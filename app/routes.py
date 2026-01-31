@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify, flash, send_file, Response
-from app.models import db, Channel, ChatMessage, StreamStats, AnalysisResult, Stream, SystemConfig
+from app.models import db, Channel, ChatMessage, StreamStats, AnalysisResult, Stream, SystemConfig, Viewer
 from app.auth import login_required
 from app.tasks import analyze_channel
 from app.analysis import generate_wordcloud, analyze_sentiment
@@ -241,6 +241,24 @@ def api_network(channel_id):
     messages = ChatMessage.query.filter_by(channel_id=channel_id).order_by(ChatMessage.timestamp.desc()).limit(500).all()
     graph_data = generate_user_network(messages)
     return jsonify(graph_data)
+
+@main.route('/api/viewers/<int:channel_id>')
+@login_required
+def api_viewers(channel_id):
+    # Get all viewers for this channel, sorted by message count
+    viewers = Viewer.query.filter_by(channel_id=channel_id).order_by(Viewer.message_count.desc()).limit(1000).all()
+
+    data = []
+    for v in viewers:
+        data.append({
+            'username': v.username,
+            'message_count': v.message_count,
+            'is_subscriber': v.is_subscriber,
+            'is_mod': v.is_mod,
+            'last_seen': v.last_seen.strftime('%Y-%m-%d %H:%M:%S'),
+            'color': v.color
+        })
+    return jsonify(data)
 
 @main.route('/add_channel', methods=['POST'])
 @login_required

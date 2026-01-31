@@ -16,9 +16,28 @@ class Channel(db.Model):
     stats = db.relationship('StreamStats', backref='channel', lazy='dynamic', cascade="all, delete-orphan")
     analyses = db.relationship('AnalysisResult', backref='channel', lazy='dynamic', cascade="all, delete-orphan")
     streams = db.relationship('Stream', backref='channel', lazy='dynamic', cascade="all, delete-orphan")
+    viewers = db.relationship('Viewer', backref='channel', lazy='dynamic', cascade="all, delete-orphan")
 
     def __repr__(self):
         return f'<Channel {self.name}>'
+
+class Viewer(db.Model):
+    __tablename__ = 'viewers'
+    __table_args__ = (db.UniqueConstraint('channel_id', 'username', name='_channel_viewer_uc'),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    channel_id = db.Column(db.Integer, db.ForeignKey('channels.id'), nullable=False)
+    username = db.Column(db.String(128), nullable=False, index=True)
+    twitch_id = db.Column(db.String(64), nullable=True)
+    first_seen = db.Column(db.DateTime, default=datetime.utcnow)
+    last_seen = db.Column(db.DateTime, default=datetime.utcnow)
+    message_count = db.Column(db.Integer, default=1)
+    is_subscriber = db.Column(db.Boolean, default=False)
+    is_mod = db.Column(db.Boolean, default=False)
+    color = db.Column(db.String(32), nullable=True)
+
+    def __repr__(self):
+        return f'<Viewer {self.username} in {self.channel_id}>'
 
 class Stream(db.Model):
     __tablename__ = 'streams'
