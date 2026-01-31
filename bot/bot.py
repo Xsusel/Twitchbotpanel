@@ -37,10 +37,13 @@ class Bot(commands.Bot):
         self.channels_to_monitor = []
         self.last_cleanup = datetime.utcnow()
         self.active_speakers = defaultdict(set) # channel_name -> set(usernames)
+        self.channel_ids = {} # name -> id (cache for API calls)
+        self.bot_user_id = None # Cache for bot's own ID
 
     async def event_ready(self):
         print(f'Logged in as | {self.nick}')
         print(f'User id is | {self.user_id}')
+        self.bot_user_id = self.user_id
 
         await self.load_channels()
         # Start background task
@@ -185,6 +188,58 @@ class Bot(commands.Bot):
         except Exception as e:
             print(f"Error saving message: {e}")
 
+    async def fetch_real_chatter_count(self, channel_name):
+        """
+        Fetches the accurate chatter count using Twitch Helix API.
+        Requires the bot to be a moderator to get the full list,
+        but we can try to get the list/count if possible.
+        Actually, GET /chat/chatters requires 'moderator:read:chatters'.
+        """
+        try:
+            broadcaster_id = self.channel_ids.get(channel_name)
+            if not broadcaster_id:
+                # Try to fetch user to get ID
+                users = await self.fetch_users(names=[channel_name])
+                if users:
+                    broadcaster_id = str(users[0].id)
+                    self.channel_ids[channel_name] = broadcaster_id
+
+            if not broadcaster_id or not self.bot_user_id:
+                return 0
+
+            token = Config.TWITCH_IRC_TOKEN.replace("oauth:", "")
+            headers = {
+                'Client-ID': Config.TWITCH_CLIENT_ID,
+                'Authorization': f'Bearer {token}'
+            }
+
+            # Helper to handle pagination if needed, but for count we might just get first page total?
+            # Twitch API response for chatters includes 'total'.
+            url = f"https://api.twitch.tv/helix/chat/chatters"
+            params = {
+                'broadcaster_id': broadcaster_id,
+                'moderator_id': self.bot_user_id,
+                'first': 1 # We just want the total
+            }
+
+            # We need to run this sync request in a thread or use aiohttp if available
+            # Since requests is sync, wrap in to_thread
+            resp = await asyncio.to_thread(requests.get, url, headers=headers, params=params)
+
+            if resp.status_code == 200:
+                data = resp.json()
+                return data.get('total', 0)
+            elif resp.status_code == 401:
+                 print(f"API Unauthorized for {channel_name}. Check token scopes.")
+            elif resp.status_code == 403:
+                 # Likely not a moderator
+                 pass
+
+            return 0
+        except Exception as e:
+            print(f"Error fetching real chatter count: {e}")
+            return 0
+
     async def background_monitor(self):
         while True:
             try:
@@ -226,13 +281,24 @@ class Bot(commands.Bot):
                                  "title": s.title,
                                  "game_name": s.game_name
                              }
+                             # Cache ID
+                             self.channel_ids[s.user.name.lower()] = str(s.user.id)
+
                         fetch_success = True
                     except Exception as e:
                         print(f"Error fetching streams: {e}")
 
                     # Run save_stats in thread ONLY if fetch was successful
                     if fetch_success:
-                        await asyncio.to_thread(self.save_stats, self.channels_to_monitor, stream_data)
+                        # Fetch chatter counts concurrently
+                        chatter_counts = {}
+                        for name in self.channels_to_monitor:
+                            if name.lower() in stream_data: # Only if live
+                                count = await self.fetch_real_chatter_count(name.lower())
+                                if count > 0:
+                                    chatter_counts[name.lower()] = count
+
+                        await asyncio.to_thread(self.save_stats, self.channels_to_monitor, stream_data, chatter_counts)
 
                 # Periodic Cleanup (Once a day)
                 now = datetime.utcnow()
@@ -252,7 +318,7 @@ class Bot(commands.Bot):
         except Exception as e:
              print(f"Error triggering cleanup: {e}")
 
-    def save_stats(self, channel_names, stream_data):
+    def save_stats(self, channel_names, stream_data, chatter_counts):
         with self.app.app_context():
             for name in channel_names:
                 try:
@@ -295,15 +361,22 @@ class Bot(commands.Bot):
 
                     viewer_count = data['viewer_count'] if is_live else 0
 
-                    # Get chatter count (Use TwitchIO cache or 0 if unavailable)
-                    chatter_count = 0
-                    if is_live:
+                    # Get chatter count
+                    # Priority: API count > IRC cache > 0
+                    chatter_count = chatter_counts.get(name.lower(), 0)
+
+                    if chatter_count == 0 and is_live:
+                        # Fallback to IRC cache if API failed or returned 0 (and we know it shouldn't be 0 if live?)
+                        # Actually 0 is valid. But if API failed (403/401), we might want fallback.
+                        # For now, let's just use what we have.
                         try:
                             channel = self.get_channel(name)
                             if channel and channel.chatters:
-                                chatter_count = len(channel.chatters)
+                                irc_count = len(channel.chatters)
+                                if irc_count > chatter_count:
+                                    chatter_count = irc_count
                         except Exception as e:
-                            print(f"Error getting chatter count: {e}")
+                            print(f"Error getting chatter count from IRC: {e}")
 
                     # Calculate active chatters
                     active_count = len(self.active_speakers.get(name, set()))
