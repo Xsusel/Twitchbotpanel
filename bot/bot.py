@@ -3,6 +3,7 @@ import os
 import asyncio
 import requests
 from datetime import datetime
+from collections import defaultdict
 
 # Add root path to sys.path to allow imports from app
 sys.path.append(os.getcwd())
@@ -35,6 +36,7 @@ class Bot(commands.Bot):
         super().__init__(token=token, prefix='?', initial_channels=[])
         self.channels_to_monitor = []
         self.last_cleanup = datetime.utcnow()
+        self.active_speakers = defaultdict(set) # channel_name -> set(usernames)
 
     async def event_ready(self):
         print(f'Logged in as | {self.nick}')
@@ -82,6 +84,14 @@ class Bot(commands.Bot):
             # Handle user ID (TwitchIO 2.x 'id' field for user)
             twitch_id = str(author.id) if hasattr(author, 'id') else None
 
+            # Extract sub tier
+            sub_tier = None
+            if badges and 'subscriber' in badges:
+                sub_tier = str(badges['subscriber'])
+
+            # Update active speakers (thread-safe enough for this purpose)
+            self.active_speakers[channel_name].add(username)
+
             with self.app.app_context():
                 channel = Channel.query.filter_by(name=channel_name).first()
                 if channel:
@@ -109,6 +119,8 @@ class Bot(commands.Bot):
                         viewer.message_count += 1
                         viewer.is_subscriber = bool(is_subscriber)
                         viewer.is_mod = bool(is_mod)
+                        if sub_tier:
+                            viewer.sub_tier = sub_tier
                         if color:
                             viewer.color = color
 
@@ -134,6 +146,7 @@ class Bot(commands.Bot):
                             message_count=1,
                             is_subscriber=bool(is_subscriber),
                             is_mod=bool(is_mod),
+                            sub_tier=sub_tier,
                             color=color
                         )
                         db.session.add(viewer)
@@ -292,11 +305,18 @@ class Bot(commands.Bot):
                         except Exception as e:
                             print(f"Error getting chatter count: {e}")
 
+                    # Calculate active chatters
+                    active_count = len(self.active_speakers.get(name, set()))
+                    # Clear the set for next interval
+                    if name in self.active_speakers:
+                        self.active_speakers[name].clear()
+
                     stats = StreamStats(
                         channel_id=c.id,
                         stream_id=active_stream.id if active_stream else None,
                         viewer_count=viewer_count,
-                        chatter_count=chatter_count
+                        chatter_count=chatter_count,
+                        active_chatter_count=active_count
                     )
                     db.session.add(stats)
 

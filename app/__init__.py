@@ -45,7 +45,21 @@ def check_and_migrate_db(app):
                     if "stream_id" not in cols:
                         print("Migrating: Adding stream_id to stream_stats")
                         conn.execute(text("ALTER TABLE stream_stats ADD COLUMN stream_id INTEGER REFERENCES streams(id)"))
-                        conn.commit()
+                    if "active_chatter_count" not in cols:
+                        print("Migrating: Adding active_chatter_count to stream_stats")
+                        conn.execute(text("ALTER TABLE stream_stats ADD COLUMN active_chatter_count INTEGER DEFAULT 0"))
+                    conn.commit()
+
+                # Add fields to viewers
+                if "viewers" in inspector.get_table_names():
+                    cols = [c['name'] for c in inspector.get_columns("viewers")]
+                    if "sub_tier" not in cols:
+                        print("Migrating: Adding sub_tier to viewers")
+                        conn.execute(text("ALTER TABLE viewers ADD COLUMN sub_tier VARCHAR(32)"))
+                    if "follow_duration" not in cols:
+                        print("Migrating: Adding follow_duration to viewers")
+                        conn.execute(text("ALTER TABLE viewers ADD COLUMN follow_duration INTEGER"))
+                    conn.commit()
 
                 # Add stream_id to analysis_results
                 if "analysis_results" in inspector.get_table_names():
