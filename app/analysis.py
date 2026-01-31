@@ -86,6 +86,13 @@ def calculate_timing_variance(messages):
 
     return variance
 
+ALLOWED_LANGS = {'pl', 'en', 'de', 'ru', 'uk'}
+
+def normalize_lang(lang):
+    if lang in ALLOWED_LANGS:
+        return lang
+    return 'other'
+
 def detect_dominant_language(messages):
     if not messages:
         return "unknown"
@@ -95,7 +102,8 @@ def detect_dominant_language(messages):
         return "unknown"
 
     try:
-        return detect(text_content)
+        lang = detect(text_content)
+        return normalize_lang(lang)
     except LangDetectException:
         return "unknown"
 
@@ -109,14 +117,41 @@ def get_language_distribution(messages):
     counts = {}
     for msg in messages:
         text = msg.message if hasattr(msg, 'message') else msg.get('message', '')
+        if len(text) < 3: # Skip very short messages
+            continue
         try:
             lang = detect(text)
+            lang = normalize_lang(lang)
         except LangDetectException:
             lang = 'unknown'
 
         counts[lang] = counts.get(lang, 0) + 1
 
     return counts
+
+STOPWORDS = set([
+    'i', 'w', 'na', 'z', 'do', 'o', 'a', 'że', 'to', 'jest', 'nie', 'ale', 'się', 'co', 'jak', 'tak',
+    'mnie', 'mi', 'ci', 'mu', 'jej', 'nam', 'wam', 'im', 'ten', 'ta', 'to', 'tam', 'tu', 'gdzie', 'kiedy',
+    'the', 'and', 'is', 'a', 'in', 'to', 'of', 'it', 'for', 'on', 'with', 'as', 'this', 'that', 'but',
+    'be', 'at', 'by', 'not', 'or', 'from', 'you', 'are', 'me', 'my', 'your', 'so', 'was', 'if', 'lol', 'xd', 'lmao'
+])
+
+def extract_trending_topics(messages, top_n=10):
+    if not messages:
+        return []
+
+    text = " ".join([msg.message for msg in messages if hasattr(msg, 'message')]).lower()
+    # Remove punctuation basic
+    import re
+    text = re.sub(r'[^\w\s]', '', text)
+    words = text.split()
+
+    # Filter
+    filtered = [w for w in words if len(w) > 3 and w not in STOPWORDS]
+
+    from collections import Counter
+    counts = Counter(filtered)
+    return [t[0] for t in counts.most_common(top_n)]
 
 def analyze_usernames(messages):
     """

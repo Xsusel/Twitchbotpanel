@@ -37,6 +37,8 @@ class Viewer(db.Model):
     last_seen = db.Column(db.DateTime, default=datetime.utcnow)
     message_count = db.Column(db.Integer, default=1)
     is_subscriber = db.Column(db.Boolean, default=False)
+    sub_tier = db.Column(db.String(32), nullable=True) # e.g. "1000", "2000", "3000" or "Prime"
+    follow_duration = db.Column(db.Integer, nullable=True) # Seconds following
     is_mod = db.Column(db.Boolean, default=False)
     color = db.Column(db.String(32), nullable=True)
 
@@ -110,10 +112,11 @@ class StreamStats(db.Model):
     stream_id = db.Column(db.Integer, db.ForeignKey('streams.id'), nullable=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     viewer_count = db.Column(db.Integer, default=0)
-    chatter_count = db.Column(db.Integer, default=0)
+    chatter_count = db.Column(db.Integer, default=0) # Connected to IRC
+    active_chatter_count = db.Column(db.Integer, default=0) # Actually speaking
 
     def __repr__(self):
-        return f'<Stats {self.channel_id} V:{self.viewer_count} C:{self.chatter_count}>'
+        return f'<Stats {self.channel_id} V:{self.viewer_count} C:{self.chatter_count} A:{self.active_chatter_count}>'
 
 class AnalysisResult(db.Model):
     __tablename__ = 'analysis_results'

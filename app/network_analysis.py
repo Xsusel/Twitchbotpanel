@@ -1,5 +1,6 @@
 import networkx as nx
 from collections import defaultdict
+from app.models import Viewer
 
 def generate_user_network(messages):
     """
@@ -8,10 +9,24 @@ def generate_user_network(messages):
     Nodes: Users
     Links: User A mentions User B, or User A and User B chat in close proximity (simple heuristic)
     """
-    G = nx.Graph()
+    G = nx.DiGraph()
 
     if not messages:
         return {"nodes": [], "links": []}
+
+    # Pre-fetch viewer scores
+    usernames = set()
+    channel_id = messages[0].channel_id if hasattr(messages[0], 'channel_id') else None
+
+    for msg in messages:
+        u = msg.username if hasattr(msg, 'username') else msg.get('username', '')
+        usernames.add(u)
+
+    viewer_scores = {}
+    if channel_id:
+        viewers = Viewer.query.filter(Viewer.channel_id == channel_id, Viewer.username.in_(usernames)).all()
+        for v in viewers:
+            viewer_scores[v.username] = v.suspicion_score
 
     # 1. Build Graph from Mentions
     # Iterate messages, find @username mentions
@@ -30,10 +45,11 @@ def generate_user_network(messages):
         content = msg.message if hasattr(msg, 'message') else msg.get('message', '')
 
         active_users.add(username)
+        score = viewer_scores.get(username, 0)
 
         # Add Node
         if not G.has_node(username):
-            G.add_node(username, group=1) # Group 1: Normal?
+            G.add_node(username, group=1, score=score) # Group 1: Normal?
 
         # Detect Mentions (simple regex @\w+)
         import re
@@ -42,7 +58,9 @@ def generate_user_network(messages):
             # We assume mentioned user exists in graph only if we saw them chat?
             # Or add them as potential target
             if not G.has_node(mentioned):
-                 G.add_node(mentioned, group=2) # Group 2: Target/Mentioned only
+                 # Try to look up score if we have it (might not if they didn't speak in this batch)
+                 m_score = viewer_scores.get(mentioned, 0)
+                 G.add_node(mentioned, group=2, score=m_score) # Group 2: Target/Mentioned only
 
             if G.has_edge(username, mentioned):
                 G[username][mentioned]['weight'] += 1
@@ -77,7 +95,11 @@ def generate_user_network(messages):
     # Format for D3
     nodes = []
     for n in G.nodes(data=True):
-        nodes.append({"id": n[0], "group": n[1].get("group", 1)})
+        nodes.append({
+            "id": n[0],
+            "group": n[1].get("group", 1),
+            "score": n[1].get("score", 0)
+        })
 
     links = []
     for u, v, data in G.edges(data=True):

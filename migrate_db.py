@@ -51,6 +51,22 @@ def migrate():
                             print(f"Adding 'stream_id' to '{table}'...")
                             conn.execute(text(f"ALTER TABLE {table} ADD COLUMN stream_id INTEGER REFERENCES streams(id);"))
 
+                # Add new columns for version 2
+                if inspector.has_table("stream_stats"):
+                    cols = [c['name'] for c in inspector.get_columns("stream_stats")]
+                    if "active_chatter_count" not in cols:
+                        print("Adding 'active_chatter_count' to 'stream_stats'...")
+                        conn.execute(text("ALTER TABLE stream_stats ADD COLUMN active_chatter_count INTEGER DEFAULT 0;"))
+
+                if inspector.has_table("viewers"):
+                    cols = [c['name'] for c in inspector.get_columns("viewers")]
+                    if "sub_tier" not in cols:
+                        print("Adding 'sub_tier' to 'viewers'...")
+                        conn.execute(text("ALTER TABLE viewers ADD COLUMN sub_tier VARCHAR(32);"))
+                    if "follow_duration" not in cols:
+                        print("Adding 'follow_duration' to 'viewers'...")
+                        conn.execute(text("ALTER TABLE viewers ADD COLUMN follow_duration INTEGER;"))
+
                 conn.commit()
                 print("Migration complete.")
                 break

@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, jsonif
 from app.models import db, Channel, ChatMessage, StreamStats, AnalysisResult, Stream, SystemConfig, Viewer, StreamViewerStats
 from app.auth import login_required
 from app.tasks import analyze_channel
-from app.analysis import generate_wordcloud, analyze_sentiment, analyze_viewer_growth
+from app.analysis import generate_wordcloud, analyze_sentiment, analyze_viewer_growth, extract_trending_topics
 from app.network_analysis import generate_user_network
 from app.reports import generate_pdf_report
 from datetime import datetime, timedelta
@@ -83,7 +83,8 @@ def api_stream_stats(stream_id):
     data = {
         'labels': [s.timestamp.strftime('%H:%M') for s in stats],
         'viewers': [s.viewer_count for s in stats],
-        'chatters': [s.chatter_count for s in stats]
+        'chatters': [s.chatter_count for s in stats],
+        'active_chatters': [s.active_chatter_count for s in stats]
     }
     return jsonify(data)
 
@@ -144,7 +145,8 @@ def api_channel_stats(channel_id):
     data = {
         'labels': [s.timestamp.strftime('%H:%M') for s in stats],
         'viewers': [s.viewer_count for s in stats],
-        'chatters': [s.chatter_count for s in stats]
+        'chatters': [s.chatter_count for s in stats],
+        'active_chatters': [s.active_chatter_count for s in stats]
     }
     return jsonify(data)
 
@@ -155,7 +157,16 @@ def api_channel_analysis(channel_id):
     latest = AnalysisResult.query.filter_by(channel_id=channel_id).order_by(AnalysisResult.timestamp.desc()).first()
     if not latest:
         return jsonify({})
-    return jsonify(latest.details)
+
+    # Enrich details with real-time topics if not present
+    details = latest.details
+    if 'topics' not in details or not details['topics']:
+        # Generate topics on the fly from recent messages
+        messages = ChatMessage.query.filter_by(channel_id=channel_id).order_by(ChatMessage.timestamp.desc()).limit(200).all()
+        topics = extract_trending_topics(messages)
+        details['topics'] = topics
+
+    return jsonify(details)
 
 @main.route('/api/logs/<int:channel_id>')
 @login_required
@@ -277,9 +288,11 @@ def api_viewers(channel_id):
             'username': v.username,
             'message_count': v.message_count,
             'is_subscriber': v.is_subscriber,
+            'sub_tier': v.sub_tier,
             'is_mod': v.is_mod,
             'last_seen': v.last_seen.strftime('%Y-%m-%d %H:%M:%S'),
-            'color': v.color
+            'color': v.color,
+            'follow_duration': v.follow_duration
         })
     return jsonify(data)
 

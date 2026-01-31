@@ -173,6 +173,7 @@
                             <tr>
                                 <th>Użytkownik</th>
                                 <th>Status</th>
+                                <th>Tier Suba</th>
                                 <th>Wiadomości</th>
                                 <th>Ostatnio Widziany</th>
                                 <th>Akcje</th>
@@ -238,6 +239,18 @@
                 ratioChart.data.labels = data.labels;
                 ratioChart.data.datasets[0].data = data.viewers;
                 ratioChart.data.datasets[1].data = data.chatters;
+                if(data.active_chatters) {
+                    if(ratioChart.data.datasets.length < 3) {
+                        ratioChart.data.datasets.push({
+                            label: 'Aktywni',
+                            data: data.active_chatters,
+                            borderColor: '#28a745',
+                            tension: 0.3
+                        });
+                    } else {
+                        ratioChart.data.datasets[2].data = data.active_chatters;
+                    }
+                }
                 ratioChart.update();
             } else {
                 ratioChart = new Chart(ctx, {
@@ -252,9 +265,14 @@
                             fill: true,
                             tension: 0.3
                         }, {
-                            label: 'Czatujący',
+                            label: 'Połączeni (IRC)',
                             data: data.chatters,
                             borderColor: '#ff6384',
+                            tension: 0.3
+                        }, {
+                            label: 'Aktywni (Czatujący)',
+                            data: data.active_chatters || [],
+                            borderColor: '#28a745',
                             tension: 0.3
                         }]
                     },
@@ -419,7 +437,33 @@
                 .attr("stroke", d => d.value > 1 ? "red" : "#999").attr("stroke-width", d => Math.sqrt(d.value));
 
             const node = svg.append("g").selectAll("circle").data(data.nodes).join("circle")
-                .attr("r", 5).attr("fill", d => d.group===1 ? "#0053f1" : "red");
+                .attr("r", d => 5 + (d.score/10))
+                .attr("fill", d => {
+                    if (d.score > 70) return "red";
+                    if (d.score > 30) return "orange";
+                    return "#0053f1";
+                })
+                .call(d3.drag()
+                    .on("start", dragstarted)
+                    .on("drag", dragged)
+                    .on("end", dragended));
+
+            node.append("title").text(d => `${d.id} (Score: ${d.score})`);
+
+            function dragstarted(event, d) {
+              if (!event.active) simulation.alphaTarget(0.3).restart();
+              d.fx = d.x;
+              d.fy = d.y;
+            }
+            function dragged(event, d) {
+              d.fx = event.x;
+              d.fy = event.y;
+            }
+            function dragended(event, d) {
+              if (!event.active) simulation.alphaTarget(0);
+              d.fx = null;
+              d.fy = null;
+            }
 
             simulation.on("tick", () => {
                 link.attr("x1", d => d.source.x).attr("y1", d => d.source.y).attr("x2", d => d.target.x).attr("y2", d => d.target.y);
@@ -455,6 +499,7 @@
                              return badges;
                          }
                      },
+                     { data: 'sub_tier', defaultContent: '-' },
                      { data: 'message_count' },
                      { data: 'last_seen' },
                      {
