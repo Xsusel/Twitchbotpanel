@@ -10,14 +10,48 @@
 </div>
 
 <div class="row">
-    <div class="col-md-12 mb-4">
-        <div class="card">
+    <div class="col-md-8 mb-4">
+        <div class="card h-100">
             <div class="card-header">Historia Widzów</div>
             <div class="card-body">
                 <div style="height: 300px;">
                     <canvas id="streamChart"></canvas>
                 </div>
             </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header">Wykryte Anomalie</div>
+            <div class="card-body">
+                <div id="growthData">
+                    <div class="spinner-border text-primary" role="status"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12 mb-4">
+        <div class="card border-danger">
+             <div class="card-header bg-danger text-white">Podejrzani Widzowie</div>
+             <div class="card-body bg-dark">
+                 <div class="table-responsive">
+                     <table id="suspiciousTable" class="table table-dark table-hover w-100">
+                         <thead>
+                             <tr>
+                                 <th>Użytkownik</th>
+                                 <th>Poziom Podejrzenia</th>
+                                 <th>Powód</th>
+                                 <th>Wiadomości</th>
+                                 <th>Pierwszy raz</th>
+                             </tr>
+                         </thead>
+                         <tbody></tbody>
+                     </table>
+                 </div>
+             </div>
         </div>
     </div>
 </div>
@@ -41,11 +75,28 @@
 <script>
     const streamId = {{ stream.id }};
     const ctx = document.getElementById('streamChart').getContext('2d');
+    let suspiciousTable;
 
     async function loadData() {
-        // Stats
+        // Stats & Growth
         const statsRes = await fetch(`/api/stream/${streamId}/stats`);
         const statsData = await statsRes.json();
+
+        // Growth API
+        const growthRes = await fetch(`/api/stream/${streamId}/growth`);
+        const growthData = await growthRes.json();
+
+        if (growthData.has_spike) {
+             let html = `<div class="alert alert-danger">⚠️ Wykryto ${growthData.spike_count} nagłych skoków widowni!</div>`;
+             html += `<ul class="list-group list-group-flush text-dark">`;
+             growthData.spikes.forEach(s => {
+                 html += `<li class="list-group-item"><strong>${s.time.split('T')[1].substring(0,5)}</strong>: +${Math.round(s.rate)}/min (${s.from} -> ${s.to})</li>`;
+             });
+             html += `</ul>`;
+             document.getElementById('growthData').innerHTML = html;
+        } else {
+             document.getElementById('growthData').innerHTML = `<div class="text-success"><i class="fas fa-check-circle"></i> Brak nienaturalnych skoków widowni.</div>`;
+        }
 
         new Chart(ctx, {
             type: 'line',
@@ -65,6 +116,35 @@
             },
             options: { responsive: true, maintainAspectRatio: false }
         });
+
+        // Suspicious Viewers
+        const susRes = await fetch(`/api/stream/${streamId}/suspicious`);
+        const susData = await susRes.json();
+
+        if ($.fn.DataTable.isDataTable('#suspiciousTable')) {
+             suspiciousTable.clear().rows.add(susData).draw();
+        } else {
+             suspiciousTable = $('#suspiciousTable').DataTable({
+                 data: susData,
+                 columns: [
+                     {
+                         data: 'username',
+                         render: function(data) { return `<a href="/user/${data}" class="text-danger fw-bold">${data}</a>`; }
+                     },
+                     {
+                         data: 'score',
+                         render: function(data) { return `<div class="progress" style="height: 20px;"><div class="progress-bar bg-danger" role="progressbar" style="width: ${data}%">${data}%</div></div>`; }
+                     },
+                     { data: 'reasons' },
+                     { data: 'message_count' },
+                     {
+                         data: 'first_seen',
+                         render: function(data) { return data.split('T')[1].substring(0,8); }
+                     }
+                 ],
+                 order: [[ 1, "desc" ]]
+             });
+        }
 
         // Logs
         const logsRes = await fetch(`/api/stream/${streamId}/logs?limit=5000`);

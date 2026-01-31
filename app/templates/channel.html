@@ -18,6 +18,9 @@
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab">Historia Transmisji</button>
     </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="viewers-tab" data-bs-toggle="tab" data-bs-target="#viewers" type="button" role="tab">Widzowie</button>
+    </li>
 </ul>
 
 <div class="tab-content" id="channelTabsContent">
@@ -158,6 +161,29 @@
              </div>
         </div>
     </div>
+
+    <!-- Viewers Tab -->
+    <div class="tab-pane fade" id="viewers" role="tabpanel">
+        <div class="card">
+            <div class="card-header">Najaktywniejsi Widzowie</div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table id="viewersTable" class="table table-dark table-striped w-100">
+                        <thead>
+                            <tr>
+                                <th>Użytkownik</th>
+                                <th>Status</th>
+                                <th>Wiadomości</th>
+                                <th>Ostatnio Widziany</th>
+                                <th>Akcje</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -173,7 +199,7 @@
     const ctxLang = document.getElementById('langChart').getContext('2d');
     const ctxHist = document.getElementById('historyChart').getContext('2d');
     let ratioChart, langChart, historyChart;
-    let streamsTable;
+    let streamsTable, viewersTable;
 
     // --- WebSocket ---
     socket.on('connect', () => console.log('Connected to WebSocket'));
@@ -403,6 +429,46 @@
     }
 
     // Init
+    async function fetchViewers() {
+        const res = await fetch(`/api/viewers/${channelId}`);
+        const data = await res.json();
+
+        if ($.fn.DataTable.isDataTable('#viewersTable')) {
+             viewersTable.clear().rows.add(data).draw();
+        } else {
+             viewersTable = $('#viewersTable').DataTable({
+                 data: data,
+                 columns: [
+                     {
+                         data: 'username',
+                         render: function(data, type, row) {
+                             let color = row.color || '#fff';
+                             return `<span style="color:${color}; font-weight:bold;">${data}</span>`;
+                         }
+                     },
+                     {
+                         data: null,
+                         render: function(data, type, row) {
+                             let badges = '';
+                             if (row.is_mod) badges += '<i class="fas fa-hammer text-success me-1" title="Moderator"></i>';
+                             if (row.is_subscriber) badges += '<i class="fas fa-star text-warning me-1" title="Subskrybent"></i>';
+                             return badges;
+                         }
+                     },
+                     { data: 'message_count' },
+                     { data: 'last_seen' },
+                     {
+                         data: 'username',
+                         render: function(data) {
+                             return `<a href="/user/${data}" class="btn btn-sm btn-info"><i class="fas fa-user"></i> Profil</a>`;
+                         }
+                     }
+                 ],
+                 order: [[ 2, "desc" ]]
+             });
+        }
+    }
+
     $(document).ready(function() {
         fetchStats();
         fetchAnalysis();
@@ -410,11 +476,13 @@
         fetchHistory();
         fetchStreams();
         fetchNetwork();
+        fetchViewers();
 
         setInterval(fetchStats, 30000);
         setInterval(fetchAnalysis, 30000);
         setInterval(fetchNetwork, 60000);
         setInterval(fetchStreams, 60000); // Update duration
+        setInterval(fetchViewers, 60000);
     });
 </script>
 {% endblock %}
