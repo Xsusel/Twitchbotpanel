@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="text-primary"><i class="fas fa-cogs"></i> Ustawienia Systemu</h2>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">Konfiguracja API Twitch</div>
+            <div class="card-body">
+                <form action="{{ url_for('main.settings') }}" method="POST">
+                    <div class="mb-3">
+                        <label for="twitch_client_id" class="form-label">Client ID</label>
+                        <input type="text" class="form-control" id="twitch_client_id" name="twitch_client_id" value="{{ config_data.get('twitch_client_id', '') }}">
+                    </div>
+                    <div class="mb-3">
+                        <label for="twitch_client_secret" class="form-label">Client Secret</label>
+                        <input type="password" class="form-control" id="twitch_client_secret" name="twitch_client_secret" value="{{ config_data.get('twitch_client_secret', '') }}">
+                    </div>
+                    <div class="mb-3">
+                        <label for="twitch_irc_token" class="form-label">IRC Token (oauth:...)</label>
+                        <input type="password" class="form-control" id="twitch_irc_token" name="twitch_irc_token" value="{{ config_data.get('twitch_irc_token', '') }}">
+                    </div>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Zapisz Konfigurację</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">Status API</div>
+            <div class="card-body text-center">
+                <div id="apiStatusResult" class="mb-3">
+                    <i class="fas fa-question-circle fa-3x text-secondary"></i>
+                    <p class="mt-2 text-muted">Kliknij poniżej, aby sprawdzić połączenie.</p>
+                </div>
+                <button id="checkApiBtn" class="btn btn-warning w-100"><i class="fas fa-plug"></i> Sprawdź Połączenie API</button>
+            </div>
+        </div>
+
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i> Uwaga: Po zmianie kluczy API konieczny może być restart usługi bota (<code>systemctl restart xsus-bot</code>).
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $('#checkApiBtn').click(function() {
+        const btn = $(this);
+        const resultDiv = $('#apiStatusResult');
+
+        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Sprawdzanie...');
+
+        $.ajax({
+            url: "{{ url_for('main.check_api') }}",
+            type: "GET",
+            success: function(response) {
+                if (response.status === 'ok') {
+                    resultDiv.html(`
+                        <i class="fas fa-check-circle fa-3x text-success"></i>
+                        <p class="mt-2 text-success fw-bold">Połączenie Aktywne</p>
+                        <small class="text-muted">Token ważny dla użytkownika: ${response.user}</small>
+                    `);
+                } else {
+                    resultDiv.html(`
+                        <i class="fas fa-times-circle fa-3x text-danger"></i>
+                        <p class="mt-2 text-danger fw-bold">Błąd Połączenia</p>
+                        <small class="text-danger">${response.message}</small>
+                    `);
+                }
+            },
+            error: function() {
+                resultDiv.html(`
+                    <i class="fas fa-exclamation-triangle fa-3x text-danger"></i>
+                    <p class="mt-2 text-danger">Błąd Serwera</p>
+                `);
+            },
+            complete: function() {
+                btn.prop('disabled', false).html('<i class="fas fa-plug"></i> Sprawdź Połączenie API');
+            }
+        });
+    });
+</script>
+{% endblock %}

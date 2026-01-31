@@ -9,7 +9,7 @@ sys.path.append(os.getcwd())
 
 from twitchio.ext import commands
 from app import create_app
-from app.models import db, Channel, ChatMessage, StreamStats, Stream
+from app.models import db, Channel, ChatMessage, StreamStats, Stream, SystemConfig
 from app.tasks import analyze_channel, cleanup_old_data
 from config import Config
 from flask_socketio import SocketIO
@@ -19,8 +19,20 @@ socketio = SocketIO(message_queue=Config.CELERY_BROKER_URL)
 
 class Bot(commands.Bot):
     def __init__(self):
-        super().__init__(token=Config.TWITCH_IRC_TOKEN, prefix='?', initial_channels=[])
+        # Initialize app first to access DB
         self.app = create_app()
+        token = Config.TWITCH_IRC_TOKEN
+
+        # Try to load token from DB
+        try:
+            with self.app.app_context():
+                db_token = SystemConfig.query.get('twitch_irc_token')
+                if db_token and db_token.value:
+                    token = db_token.value
+        except Exception as e:
+            print(f"Warning: Could not load token from DB: {e}")
+
+        super().__init__(token=token, prefix='?', initial_channels=[])
         self.channels_to_monitor = []
         self.last_cleanup = datetime.utcnow()
 
@@ -117,19 +129,27 @@ class Bot(commands.Bot):
 
                 if self.channels_to_monitor:
                     stream_data = {} # name -> {viewer_count, title, game_name}
+                    fetch_success = False
                     try:
-                        streams = await self.fetch_streams(user_logins=self.channels_to_monitor)
+                        # Use lowercase for API call
+                        user_logins = [name.lower() for name in self.channels_to_monitor]
+                        streams = await self.fetch_streams(user_logins=user_logins)
+
+                        print(f"Fetched {len(streams)} live streams.")
+
                         for s in streams:
                              stream_data[s.user.name.lower()] = {
                                  "viewer_count": s.viewer_count,
                                  "title": s.title,
                                  "game_name": s.game_name
                              }
+                        fetch_success = True
                     except Exception as e:
                         print(f"Error fetching streams: {e}")
 
-                    # Run save_stats in thread
-                    await asyncio.to_thread(self.save_stats, self.channels_to_monitor, stream_data)
+                    # Run save_stats in thread ONLY if fetch was successful
+                    if fetch_success:
+                        await asyncio.to_thread(self.save_stats, self.channels_to_monitor, stream_data)
 
                 # Periodic Cleanup (Once a day)
                 now = datetime.utcnow()

@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify, flash, send_file, Response
-from app.models import db, Channel, ChatMessage, StreamStats, AnalysisResult, Stream
+from app.models import db, Channel, ChatMessage, StreamStats, AnalysisResult, Stream, SystemConfig
 from app.auth import login_required
 from app.tasks import analyze_channel
 from app.analysis import generate_wordcloud, analyze_sentiment
@@ -9,6 +9,8 @@ from datetime import datetime, timedelta
 import subprocess
 import csv
 import io
+import requests
+from config import Config
 
 main = Blueprint('main', __name__)
 
@@ -320,3 +322,62 @@ def update_app():
     except Exception as e:
         flash(f'Aktualizacja nieudana: {e}')
     return redirect(url_for('main.index'))
+
+@main.route('/settings', methods=['GET', 'POST'])
+@login_required
+def settings():
+    if request.method == 'POST':
+        client_id = request.form.get('twitch_client_id')
+        client_secret = request.form.get('twitch_client_secret')
+        irc_token = request.form.get('twitch_irc_token')
+
+        keys = {
+            'twitch_client_id': client_id,
+            'twitch_client_secret': client_secret,
+            'twitch_irc_token': irc_token
+        }
+
+        for key, value in keys.items():
+            conf = SystemConfig.query.get(key)
+            if not conf:
+                conf = SystemConfig(key=key)
+                db.session.add(conf)
+            conf.value = value
+
+        db.session.commit()
+        flash('Konfiguracja zapisana. Uruchom ponownie bota, aby zastosować zmiany.')
+        return redirect(url_for('main.settings'))
+
+    # Load config
+    configs = SystemConfig.query.all()
+    config_data = {c.key: c.value for c in configs}
+    return render_template('settings.html', config_data=config_data)
+
+@main.route('/api/check_twitch')
+@login_required
+def check_api():
+    # Try loading from DB first
+    token_conf = SystemConfig.query.get('twitch_irc_token')
+    client_id_conf = SystemConfig.query.get('twitch_client_id')
+
+    token = token_conf.value if token_conf else Config.TWITCH_IRC_TOKEN
+    client_id = client_id_conf.value if client_id_conf else Config.TWITCH_CLIENT_ID
+
+    if not token or not client_id:
+        return jsonify({'status': 'error', 'message': 'Brak kluczy API'})
+
+    # Validate token
+    headers = {
+        'Authorization': f'Bearer {token.replace("oauth:", "")}',
+        'Client-Id': client_id
+    }
+
+    try:
+        resp = requests.get('https://id.twitch.tv/oauth2/validate', headers=headers)
+        if resp.status_code == 200:
+            data = resp.json()
+            return jsonify({'status': 'ok', 'user': data.get('login')})
+        else:
+            return jsonify({'status': 'error', 'message': f'Błąd API: {resp.status_code} - {resp.text}'})
+    except Exception as e:
+         return jsonify({'status': 'error', 'message': str(e)})
