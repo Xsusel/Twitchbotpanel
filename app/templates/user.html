@@ -1,72 +1,148 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="container">
-    <h2>Profil Użytkownika: <span style="color: var(--primary-blue);">{{ username }}</span></h2>
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+             <a href="javascript:history.back()" class="btn btn-secondary mb-3"><i class="fas fa-arrow-left"></i> Powrót</a>
+             <h2 class="text-primary"><i class="fas fa-user-circle"></i> Profil Użytkownika: <span class="text-white">{{ username }}</span></h2>
+        </div>
+    </div>
 
-    <div class="grid-container">
-        <!-- Summary Card -->
-        <div class="card">
-            <h3>Podsumowanie</h3>
-            <div class="stat-box">
-                <h4>Wszystkie Wiadomości</h4>
-                <span class="stat-value">{{ total_messages }}</span>
-            </div>
-            <div class="stat-box">
-                <h4>Widziany na Kanałach</h4>
-                <span class="stat-value">{{ channels_count }}</span>
-            </div>
-            <div class="stat-box">
-                <h4>Śr. Sentyment</h4>
-                <span class="stat-value">{{ avg_sentiment }}</span>
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <!-- Messages -->
+        <div class="col-md-3">
+            <div class="card bg-dark border-primary h-100">
+                <div class="card-body text-center">
+                    <h5 class="card-title text-primary">Wiadomości</h5>
+                    <p class="display-4 text-white">{{ total_messages }}</p>
+                </div>
             </div>
         </div>
-
-        <!-- Activity Heatmap -->
-        <div class="card">
-            <h3>Mapa Aktywności (UTC)</h3>
-            <div class="chart-container">
-                <canvas id="activityChart"></canvas>
+        <!-- Channels -->
+        <div class="col-md-3">
+            <div class="card bg-dark border-info h-100">
+                <div class="card-body text-center">
+                    <h5 class="card-title text-info">Widziany na Kanałach</h5>
+                    <p class="display-4 text-white">{{ channels_count }}</p>
+                    {% if channels_seen_names %}
+                    <small class="text-muted">{{ channels_seen_names|join(', ') }}</small>
+                    {% endif %}
+                </div>
             </div>
+        </div>
+        <!-- Sentiment -->
+        <div class="col-md-3">
+            <div class="card bg-dark border-success h-100">
+                <div class="card-body text-center">
+                    <h5 class="card-title text-success">Śr. Sentyment</h5>
+                    <p class="display-4 text-white">{{ avg_sentiment }}</p>
+                    <small class="text-muted">(-1.0 Negatywny ... +1.0 Pozytywny)</small>
+                </div>
+            </div>
+        </div>
+        <!-- Suspicion -->
+        <div class="col-md-3">
+            <div class="card bg-dark border-danger h-100">
+                <div class="card-body text-center">
+                    <h5 class="card-title text-danger">Maks. Podejrzenie</h5>
+                    <p class="display-4 text-danger">{{ suspicion_score }}%</p>
+                    {% if suspicion_reasons %}
+                    <div class="badge bg-warning text-dark">{{ suspicion_reasons|join(', ') }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Details Row -->
+    <div class="row mb-4">
+        <!-- Activity Heatmap -->
+        <div class="col-md-8">
+            <div class="card h-100">
+                <div class="card-header">Mapa Aktywności (Godzinowa)</div>
+                <div class="card-body">
+                    <div style="height: 300px;">
+                        <canvas id="activityChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Metadata -->
+        <div class="col-md-4">
+             <div class="card h-100">
+                 <div class="card-header">Metadane</div>
+                 <ul class="list-group list-group-flush bg-dark text-white">
+                     <li class="list-group-item bg-dark text-white">
+                         <i class="fas fa-clock"></i> Pierwszy raz widziany: <br>
+                         <strong>{{ first_seen | to_warsaw_time('%Y-%m-%d %H:%M:%S') if first_seen else 'N/A' }}</strong>
+                     </li>
+                     <li class="list-group-item bg-dark text-white">
+                         <i class="fas fa-history"></i> Ostatnio widziany: <br>
+                         <strong>{{ last_seen | to_warsaw_time('%Y-%m-%d %H:%M:%S') if last_seen else 'N/A' }}</strong>
+                     </li>
+                 </ul>
+             </div>
         </div>
     </div>
 
     <!-- Message History -->
-    <div class="card full-width" style="margin-top: 20px;">
-        <h3>Ostatnia Aktywność</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>Czas</th>
-                    <th>Kanał</th>
-                    <th>Wiadomość</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for msg in recent_messages %}
-                <tr>
-                    <td>{{ msg.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-                    <td>{{ msg.channel.name }}</td>
-                    <td>{{ msg.message }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">Historia Wiadomości (Ostatnie 500)</div>
+                <div class="card-body bg-dark">
+                    <div class="table-responsive">
+                        <table id="messagesTable" class="table table-dark table-hover w-100">
+                            <thead>
+                                <tr>
+                                    <th>Czas</th>
+                                    <th>Kanał</th>
+                                    <th>Wiadomość</th>
+                                    <th>Badges</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for msg in recent_messages %}
+                                <tr>
+                                    <td>{{ msg.timestamp | to_warsaw_time('%Y-%m-%d %H:%M:%S') }}</td>
+                                    <td>
+                                        {% if msg.channel %}
+                                        <a href="{{ url_for('main.channel_detail', channel_id=msg.channel.id) }}" class="text-info">{{ msg.channel.name }}</a>
+                                        {% else %}
+                                        <span class="text-muted">Unknown</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ msg.message }}</td>
+                                    <td>
+                                        {% for k, v in msg.badges.items() %}
+                                        <span class="badge bg-secondary">{{ k }}/{{ v }}</span>
+                                        {% endfor %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
+{% endblock %}
 
+{% block scripts %}
 <script>
     const ctx = document.getElementById('activityChart').getContext('2d');
     const activityData = {{ activity_data | tojson }};
-
-    // activityData is likely an array of 24 integers (messages per hour)
 
     new Chart(ctx, {
         type: 'bar',
         data: {
             labels: Array.from({length: 24}, (_, i) => `${i}:00`),
             datasets: [{
-                label: 'Wiadomości na godzinę',
+                label: 'Liczba wiadomości',
                 data: activityData,
                 backgroundColor: '#0053f1',
                 borderRadius: 4
@@ -79,6 +155,16 @@
                 y: { beginAtZero: true }
             }
         }
+    });
+
+    $(document).ready(function() {
+        $('#messagesTable').DataTable({
+            "order": [[ 0, "desc" ]],
+            "pageLength": 25,
+            "language": {
+                "url": "//cdn.datatables.net/plug-ins/1.13.6/i18n/pl.json"
+            }
+        });
     });
 </script>
 {% endblock %}
