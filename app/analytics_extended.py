@@ -459,3 +459,151 @@ def generate_stream_network(stream_id):
         })
 
     return {'nodes': nodes, 'edges': edges}
+
+def get_suspicion_distribution(stream_id):
+    """
+    Returns a histogram of suspicion scores for viewers in the stream.
+    Buckets: 0-20% (Safe), 21-50% (Low Risk), 51-80% (Medium Risk), 81-100% (High Risk)
+    """
+    stats = StreamViewerStats.query.filter_by(stream_id=stream_id).all()
+
+    buckets = {
+        '0-20%': 0,
+        '21-50%': 0,
+        '51-80%': 0,
+        '81-100%': 0
+    }
+
+    for s in stats:
+        score = s.suspicion_score
+        if score <= 20: buckets['0-20%'] += 1
+        elif score <= 50: buckets['21-50%'] += 1
+        elif score <= 80: buckets['51-80%'] += 1
+        else: buckets['81-100%'] += 1
+
+    return buckets
+
+def analyze_temporal_synchronization(stream_id):
+    """
+    Hive Mind: Detects second-level synchronization of messages.
+    Returns timestamps where > Threshold unique users sent a message in the same second.
+    """
+    # SQLite has limited date functions, Postgres uses date_trunc.
+    # We will fetch all timestamps and process in python for compatibility/simplicity unless volume is huge.
+    # Assuming stream logs < 100k messages, python processing is fine.
+
+    messages = db.session.query(ChatMessage.timestamp, ChatMessage.username).filter(
+        ChatMessage.stream_id == stream_id
+    ).all()
+
+    if not messages:
+        return {'spikes': []}
+
+    # Group by second
+    counts = {} # timestamp_str -> set(usernames)
+
+    for ts, user in messages:
+        ts_sec = ts.replace(microsecond=0)
+        if ts_sec not in counts:
+            counts[ts_sec] = set()
+        counts[ts_sec].add(user)
+
+    # Find spikes (e.g. > 3 users in same second)
+    spikes = []
+    THRESHOLD = 3
+
+    for ts, users in counts.items():
+        if len(users) > THRESHOLD:
+            spikes.append({
+                'timestamp': ts,
+                'count': len(users),
+                'users': list(users)[:5] # Sample
+            })
+
+    # Sort by timestamp
+    spikes.sort(key=lambda x: x['timestamp'])
+
+    # Format timestamps for JSON
+    result = []
+    for s in spikes:
+        result.append({
+            'timestamp': s['timestamp'].isoformat(),
+            'count': s['count'],
+            'users': s['users']
+        })
+
+    return {'spikes': result}
+
+def analyze_new_chatters_over_time(stream_id, bucket_minutes=5):
+    """
+    Returns time series of % messages that come from users seen for the first time during this stream.
+    """
+    stream = Stream.query.get(stream_id)
+    if not stream:
+        return {'times': [], 'ratios': []}
+
+    messages = db.session.query(ChatMessage.timestamp, ChatMessage.username).filter(
+        ChatMessage.stream_id == stream_id
+    ).order_by(ChatMessage.timestamp.asc()).all()
+
+    if not messages:
+        return {'times': [], 'ratios': []}
+
+    # Pre-fetch user first_seen dates?
+    # Or just use the fact that if Viewer.first_seen >= stream.started_at, they are new.
+    # Optimization: Get set of "new" usernames
+    new_users = set(r[0] for r in db.session.query(Viewer.username).filter(
+        Viewer.first_seen >= stream.started_at
+    ).all())
+
+    start_time = stream.started_at
+    buckets = {} # bucket_idx -> {'total': 0, 'new': 0}
+
+    for ts, username in messages:
+        delta = ts - start_time
+        minutes = int(delta.total_seconds() / 60)
+        bucket_idx = (minutes // bucket_minutes) * bucket_minutes
+
+        if bucket_idx not in buckets:
+            buckets[bucket_idx] = {'total': 0, 'new': 0}
+
+        buckets[bucket_idx]['total'] += 1
+        if username in new_users:
+            buckets[bucket_idx]['new'] += 1
+
+    sorted_times = sorted(buckets.keys())
+    times_out = []
+    ratios_out = []
+
+    for t in sorted_times:
+        b = buckets[t]
+        ratio = (b['new'] / b['total']) * 100 if b['total'] > 0 else 0
+        times_out.append(t) # Minutes from start
+        ratios_out.append(round(ratio, 1))
+
+    return {'times': times_out, 'ratios': ratios_out}
+
+def analyze_session_durations(stream_id):
+    """
+    Returns histogram of user session durations (last_seen - first_seen) in this stream.
+    """
+    stats = StreamViewerStats.query.filter_by(stream_id=stream_id).all()
+
+    buckets = {
+        '<1m': 0,
+        '1-5m': 0,
+        '5-15m': 0,
+        '15-60m': 0,
+        '>1h': 0
+    }
+
+    for s in stats:
+        duration = (s.last_seen - s.first_seen).total_seconds()
+
+        if duration < 60: buckets['<1m'] += 1
+        elif duration < 300: buckets['1-5m'] += 1
+        elif duration < 900: buckets['5-15m'] += 1
+        elif duration < 3600: buckets['15-60m'] += 1
+        else: buckets['>1h'] += 1
+
+    return buckets
