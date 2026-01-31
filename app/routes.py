@@ -7,6 +7,7 @@ from app.network_analysis import generate_user_network
 from app.reports import generate_pdf_report
 from datetime import datetime, timedelta
 import subprocess
+import sys
 import csv
 import io
 import requests
@@ -315,10 +316,12 @@ def update_app():
         # If this button just does git pull, that's what I'll leave it as, but I'll try to add the migration step here too.
 
         subprocess.run(["git", "pull"], check=True)
+        # Install dependencies
+        subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], check=True)
         # Attempt migration via python directly
         subprocess.run(["python3", "migrate_db.py"], check=True)
 
-        flash('Rozpoczęto aktualizację i migrację. W razie potrzeby zrestartuj usługi ręcznie.')
+        flash('Rozpoczęto aktualizację, instalację zależności i migrację. W razie potrzeby zrestartuj usługi ręcznie.')
     except Exception as e:
         flash(f'Aktualizacja nieudana: {e}')
     return redirect(url_for('main.index'))
