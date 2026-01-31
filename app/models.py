@@ -77,3 +77,12 @@ class AnalysisResult(db.Model):
 
     def __repr__(self):
         return f'<Analysis {self.channel_id} Score:{self.bot_score}>'
+
+class SystemConfig(db.Model):
+    __tablename__ = 'system_config'
+
+    key = db.Column(db.String(64), primary_key=True)
+    value = db.Column(db.String(255), nullable=True)
+
+    def __repr__(self):
+        return f'<Config {self.key}: {self.value}>'
