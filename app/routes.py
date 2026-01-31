@@ -12,6 +12,8 @@ import sys
 import csv
 import io
 import requests
+import os
+import signal
 from config import Config
 
 main = Blueprint('main', __name__)
@@ -421,21 +423,18 @@ def user_profile(username):
 @login_required
 def update_app():
     try:
-        # Now calls update_code.sh which handles migration
-        # But we can't run the shell script from here directly if it requires root or passwordless sudo for restart
-        # The script `update_code.sh` checks for EUID 0.
-        # This route is likely just triggering git pull.
-        # Let's assume the user has configured this to work or it's a "soft" update.
-        # However, for a proper update including restarts, it's usually done via CLI.
-        # If this button just does git pull, that's what I'll leave it as, but I'll try to add the migration step here too.
-
         subprocess.run(["git", "pull"], check=True)
         # Install dependencies
         subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], check=True)
         # Attempt migration via python directly
         subprocess.run(["python3", "migrate_db.py"], check=True)
 
-        flash('Rozpoczęto aktualizację, instalację zależności i migrację. W razie potrzeby zrestartuj usługi ręcznie.')
+        flash('Zaktualizowano kod i zależności. Próba przeładowania serwera...')
+
+        # Reload Gunicorn (Parent Process)
+        # SIGHUP signals Gunicorn to reload configuration and workers
+        os.kill(os.getppid(), signal.SIGHUP)
+
     except Exception as e:
         flash(f'Aktualizacja nieudana: {e}')
     return redirect(url_for('main.index'))
