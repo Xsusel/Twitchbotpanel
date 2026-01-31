@@ -337,17 +337,7 @@ def delete_channel_task(channel_id):
              db.session.commit()
              print(f"Deleted {deleted} stats...")
 
-        # 3. Delete Viewers (Heavy)
-        while True:
-            ids = db.session.query(Viewer.id).filter_by(channel_id=channel_id).limit(10000).all()
-            ids = [i[0] for i in ids]
-            if not ids:
-                break
-            deleted = Viewer.query.filter(Viewer.id.in_(ids)).delete(synchronize_session=False)
-            db.session.commit()
-            print(f"Deleted {deleted} viewers...")
-
-        # 4. StreamViewerStats (via Streams)
+        # 3. StreamViewerStats (via Streams) - Must be deleted BEFORE Viewers due to FK
         # Finding streams first
         streams = Stream.query.filter_by(channel_id=channel_id).all()
         stream_ids = [s.id for s in streams]
@@ -359,6 +349,16 @@ def delete_channel_task(channel_id):
             StreamViewerStats.query.filter(StreamViewerStats.stream_id.in_(batch)).delete(synchronize_session=False)
             db.session.commit()
             print(f"Deleted batch of stream viewer stats...")
+
+        # 4. Delete Viewers (Heavy)
+        while True:
+            ids = db.session.query(Viewer.id).filter_by(channel_id=channel_id).limit(10000).all()
+            ids = [i[0] for i in ids]
+            if not ids:
+                break
+            deleted = Viewer.query.filter(Viewer.id.in_(ids)).delete(synchronize_session=False)
+            db.session.commit()
+            print(f"Deleted {deleted} viewers...")
 
         # 5. Analysis Results
         AnalysisResult.query.filter_by(channel_id=channel_id).delete(synchronize_session=False)
