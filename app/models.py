@@ -84,6 +84,7 @@ class Stream(db.Model):
 
     messages = db.relationship('ChatMessage', backref='stream', lazy='dynamic', cascade="all, delete-orphan")
     stats = db.relationship('StreamStats', backref='stream', lazy='dynamic', cascade="all, delete-orphan")
+    analyses = db.relationship('AnalysisResult', backref='stream', lazy='dynamic', cascade="all, delete-orphan")
     viewer_stats = db.relationship('StreamViewerStats', backref='stream', lazy='dynamic', cascade="all, delete-orphan")
 
     def __repr__(self):
