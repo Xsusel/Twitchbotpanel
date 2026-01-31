@@ -23,6 +23,8 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 echo "[*] Running Database Migrations..."
+# Ensure .env is loaded or vars are exported
+export $(grep -v '^#' .env | xargs)
 python3 migrate_db.py
 
 echo "[*] Restarting Services..."
