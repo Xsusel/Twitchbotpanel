@@ -182,12 +182,13 @@ def check_cross_stream_zombies(stream_id):
     Finds viewers in this stream who are also in other ACTIVE streams
     and are silent in ALL of them (or just this one + others).
     """
-    # 1. Get current stream's silent viewers
-    current_lurkers_ids = [r[0] for r in db.session.query(StreamViewerStats.viewer_id).filter_by(
-        stream_id=stream_id, message_count=0
+    # 1. Get usernames of current stream's silent viewers
+    current_lurkers_usernames = [r[0] for r in db.session.query(Viewer.username).join(StreamViewerStats).filter(
+        StreamViewerStats.stream_id == stream_id,
+        StreamViewerStats.message_count == 0
     ).all()]
 
-    if not current_lurkers_ids:
+    if not current_lurkers_usernames:
         return []
 
     # 2. Get other active streams
@@ -197,37 +198,31 @@ def check_cross_stream_zombies(stream_id):
     if not active_stream_ids:
         return []
 
-    # 3. Check if these lurkers are present in other streams
-    # We want viewers who are in current_lurkers_ids AND in StreamViewerStats of other streams
-
-    zombies = []
-
-    # This query might be heavy if many viewers. Optimize?
-    # Query: Select viewer_id, stream_id from StreamViewerStats
-    # where stream_id IN active_stream_ids AND viewer_id IN current_lurkers_ids
-
+    # 3. Find these usernames in other active streams (also silent)
+    # We join Viewer to match by username across channels
     potential_zombies = db.session.query(
-        StreamViewerStats.viewer_id,
-        StreamViewerStats.stream_id
-    ).filter(
+        Viewer.username,
+        StreamViewerStats.stream_id,
+        Viewer.suspicion_score
+    ).join(StreamViewerStats).filter(
         StreamViewerStats.stream_id.in_(active_stream_ids),
-        StreamViewerStats.viewer_id.in_(current_lurkers_ids),
+        Viewer.username.in_(current_lurkers_usernames),
         StreamViewerStats.message_count == 0
     ).all()
 
     zombie_map = {}
-    for vid, sid in potential_zombies:
-        if vid not in zombie_map:
-            zombie_map[vid] = set()
-        zombie_map[vid].add(sid)
+    for username, sid, score in potential_zombies:
+        if username not in zombie_map:
+            zombie_map[username] = {'streams': set(), 'score': score}
+        zombie_map[username]['streams'].add(sid)
 
-    for vid, stream_ids in zombie_map.items():
-        viewer = Viewer.query.get(vid)
+    zombies = []
+    for username, data in zombie_map.items():
         zombies.append({
-            'username': viewer.username,
-            'other_streams_count': len(stream_ids),
-            'other_stream_ids': list(stream_ids),
-            'suspicion_score': viewer.suspicion_score
+            'username': username,
+            'other_streams_count': len(data['streams']),
+            'other_stream_ids': list(data['streams']),
+            'suspicion_score': data['score']
         })
 
     # Sort by count desc

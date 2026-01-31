@@ -64,6 +64,23 @@ def migrate():
                             print(f"Adding 'stream_id' to '{table}'...")
                             conn.execute(text(f"ALTER TABLE {table} ADD COLUMN stream_id INTEGER REFERENCES streams(id);"))
 
+                        # Fix type mismatch if stream_id exists but is VARCHAR (Postgres only)
+                        elif engine.dialect.name == 'postgresql' and table == "analysis_results":
+                            # Check type
+                            columns = inspector.get_columns(table)
+                            for col in columns:
+                                if col['name'] == 'stream_id':
+                                    type_str = str(col['type']).upper()
+                                    if 'CHAR' in type_str or 'TEXT' in type_str:
+                                        print(f"Fixing type of 'stream_id' in '{table}' (found {type_str}, converting to INTEGER)...")
+                                        # Convert using regex to handle potential bad data gracefully
+                                        conn.execute(text(f"""
+                                            ALTER TABLE {table}
+                                            ALTER COLUMN stream_id TYPE INTEGER
+                                            USING (CASE WHEN stream_id~E'^\\\\d+$' THEN stream_id::integer ELSE NULL END);
+                                        """))
+                                    break
+
                 # Add new columns for version 2
                 if inspector.has_table("stream_stats"):
                     cols = [c['name'] for c in inspector.get_columns("stream_stats")]
