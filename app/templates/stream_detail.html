@@ -33,6 +33,62 @@
 </div>
 
 <div class="row">
+    <!-- Velocity -->
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">Tempo Przyrostu/Odpływu (Velocity)</div>
+            <div class="card-body">
+                <div style="height: 250px;">
+                    <canvas id="velocityChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Heatmap -->
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">Heatmapa Aktywności Czatowej</div>
+            <div class="card-body">
+                <div style="height: 250px;">
+                    <canvas id="heatmapChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Lurkers -->
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 border-info">
+             <div class="card-header bg-info text-dark">Analiza Lurkerów</div>
+             <div class="card-body text-white" id="lurkerData">
+                 <div class="spinner-border text-info" role="status"></div>
+             </div>
+        </div>
+    </div>
+    <!-- Zombies -->
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 border-warning">
+             <div class="card-header bg-warning text-dark">Globalne Zombie (Cross-Stream)</div>
+             <div class="card-body" id="zombieData">
+                 <div class="spinner-border text-warning" role="status"></div>
+             </div>
+        </div>
+    </div>
+    <!-- Clusters -->
+    <div class="col-md-4 mb-4">
+         <div class="card h-100 border-secondary">
+             <div class="card-header">Klastry Spamu</div>
+             <div class="card-body p-0 bg-dark">
+                 <ul class="list-group list-group-flush bg-dark" id="clusterList" style="max-height: 300px; overflow-y: auto;">
+                 </ul>
+             </div>
+         </div>
+    </div>
+</div>
+
+<div class="row">
     <div class="col-12 mb-4">
         <div class="card border-danger">
              <div class="card-header bg-danger text-white">Podejrzani Widzowie</div>
@@ -75,6 +131,8 @@
 <script>
     const streamId = {{ stream.id }};
     const ctx = document.getElementById('streamChart').getContext('2d');
+    const velocityCtx = document.getElementById('velocityChart').getContext('2d');
+    const heatmapCtx = document.getElementById('heatmapChart').getContext('2d');
     let suspiciousTable;
 
     async function loadData() {
@@ -117,6 +175,118 @@
             options: { responsive: true, maintainAspectRatio: false }
         });
 
+        // Velocity
+        const velRes = await fetch(`/api/stream/${streamId}/velocity`);
+        const velData = await velRes.json();
+        new Chart(velocityCtx, {
+            type: 'line',
+            data: {
+                labels: velData.timestamps,
+                datasets: [{
+                    label: 'Zmiana Widzów/min',
+                    data: velData.velocity,
+                    borderColor: '#28a745',
+                    borderWidth: 1,
+                    pointRadius: 1,
+                    fill: false
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+
+        // Heatmap (Bar chart for now)
+        const heatRes = await fetch(`/api/stream/${streamId}/heatmap`);
+        const heatData = await heatRes.json();
+        new Chart(heatmapCtx, {
+            type: 'bar',
+            data: {
+                labels: heatData.times,
+                datasets: [{
+                    label: 'Wiadomości / 5min',
+                    data: heatData.counts,
+                    backgroundColor: '#fd7e14'
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+
+        // Lurkers
+        const lurkRes = await fetch(`/api/stream/${streamId}/lurkers`);
+        const lurkData = await lurkRes.json();
+        if (lurkData.count > 0) {
+            let lurkHtml = `<h3 class="display-6">${lurkData.count}</h3><p>Cichych widzów</p>`;
+            lurkHtml += `<p>Średni wiek konta: <strong>${lurkData.avg_account_age_days} dni</strong></p>`;
+            lurkHtml += `<p>Śr. podejrzenie: <strong>${lurkData.avg_suspicion}/100</strong></p>`;
+            lurkHtml += `<hr><h6>Dystrybucja Wieku:</h6><ul>`;
+            for (const [key, val] of Object.entries(lurkData.age_distribution)) {
+                lurkHtml += `<li>${key}: ${val}</li>`;
+            }
+            lurkHtml += `</ul>`;
+            document.getElementById('lurkerData').innerHTML = lurkHtml;
+        } else {
+            document.getElementById('lurkerData').innerHTML = "Brak danych o lurkerach.";
+        }
+
+        // Zombies
+        const zomRes = await fetch(`/api/stream/${streamId}/zombies`);
+        const zomData = await zomRes.json();
+        if (zomData.length > 0) {
+            const container = document.getElementById('zombieData');
+            container.innerHTML = '';
+
+            const alert = document.createElement('div');
+            alert.className = "alert alert-danger";
+            alert.textContent = `Wykryto ${zomData.length} Zombie!`;
+            container.appendChild(alert);
+
+            const ul = document.createElement('ul');
+            ul.className = "list-group list-group-flush text-dark";
+
+            zomData.slice(0, 10).forEach(z => {
+                const li = document.createElement('li');
+                li.className = "list-group-item bg-warning";
+                li.textContent = `${z.username} (w ${z.other_streams_count} innych)`;
+                ul.appendChild(li);
+            });
+            container.appendChild(ul);
+
+            if (zomData.length > 10) {
+                const p = document.createElement('p');
+                p.className = "mt-2 text-dark";
+                p.textContent = "...i inni";
+                container.appendChild(p);
+            }
+        } else {
+            document.getElementById('zombieData').innerHTML = `<div class="text-success">Brak Zombie aktywnych na innych kanałach.</div>`;
+        }
+
+        // Clusters
+        const clusRes = await fetch(`/api/stream/${streamId}/clusters`);
+        const clusData = await clusRes.json();
+        const clusterList = document.getElementById('clusterList');
+        clusData.forEach(c => {
+            const li = document.createElement('li');
+            li.className = "list-group-item bg-dark text-white border-secondary";
+
+            const badge = document.createElement('span');
+            badge.className = "badge bg-danger rounded-pill float-end";
+            badge.textContent = c.count;
+            li.appendChild(badge);
+
+            const strong = document.createElement('strong');
+            strong.textContent = c.pattern;
+            li.appendChild(strong);
+
+            li.appendChild(document.createElement('br'));
+
+            const small = document.createElement('small');
+            small.className = "text-muted";
+            small.textContent = c.samples.join(', ');
+            li.appendChild(small);
+
+            clusterList.appendChild(li);
+        });
+
         // Suspicious Viewers
         const susRes = await fetch(`/api/stream/${streamId}/suspicious`);
         const susData = await susRes.json();
@@ -154,7 +324,25 @@
         logs.forEach(log => {
              const div = document.createElement('div');
              div.style.borderBottom = '1px solid #333';
-             div.innerHTML = `<span style="color:#888">[${log.timestamp}]</span> <strong style="color:#0053f1">${log.username}</strong>: <span class="text-white">${log.message}</span>`;
+
+             const timeSpan = document.createElement('span');
+             timeSpan.style.color = '#888';
+             timeSpan.textContent = `[${log.timestamp}] `;
+             div.appendChild(timeSpan);
+
+             const userStrong = document.createElement('strong');
+             userStrong.style.color = '#0053f1';
+             userStrong.textContent = log.username;
+             div.appendChild(userStrong);
+
+             const colon = document.createTextNode(': ');
+             div.appendChild(colon);
+
+             const msgSpan = document.createElement('span');
+             msgSpan.className = "text-white";
+             msgSpan.textContent = log.message;
+             div.appendChild(msgSpan);
+
              container.appendChild(div);
         });
     }

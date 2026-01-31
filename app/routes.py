@@ -4,6 +4,7 @@ from app.auth import login_required
 from app.tasks import analyze_channel, delete_channel_task
 from app.analysis import generate_wordcloud, analyze_sentiment, analyze_viewer_growth, extract_trending_topics
 from app.network_analysis import generate_user_network
+from app.analytics_extended import calculate_join_part_velocity, find_message_clusters, analyze_lurkers, generate_chat_heatmap, check_cross_stream_zombies
 from app.reports import generate_pdf_report
 from datetime import datetime, timedelta
 import subprocess
@@ -294,6 +295,36 @@ def api_viewers(channel_id):
             'color': v.color,
             'follow_duration': v.follow_duration
         })
+    return jsonify(data)
+
+@main.route('/api/stream/<int:stream_id>/velocity')
+@login_required
+def api_stream_velocity(stream_id):
+    data = calculate_join_part_velocity(stream_id)
+    return jsonify(data)
+
+@main.route('/api/stream/<int:stream_id>/clusters')
+@login_required
+def api_stream_clusters(stream_id):
+    data = find_message_clusters(stream_id)
+    return jsonify(data)
+
+@main.route('/api/stream/<int:stream_id>/lurkers')
+@login_required
+def api_stream_lurkers(stream_id):
+    data = analyze_lurkers(stream_id)
+    return jsonify(data)
+
+@main.route('/api/stream/<int:stream_id>/heatmap')
+@login_required
+def api_stream_heatmap(stream_id):
+    data = generate_chat_heatmap(stream_id)
+    return jsonify(data)
+
+@main.route('/api/stream/<int:stream_id>/zombies')
+@login_required
+def api_stream_zombies(stream_id):
+    data = check_cross_stream_zombies(stream_id)
     return jsonify(data)
 
 @main.route('/add_channel', methods=['POST'])
