@@ -1,0 +1,80 @@
+LICENCJA JW-AI 1.0
+(Licencja z zastrzeżeniem zmian dokonywanych przy użyciu sztucznej inteligencji)
+
+Copyright © 2026 Jakub Wcisło. Wszelkie prawa nie udzielone wprost niniejszą licencją są zastrzeżone.
+
+§ 1. Definicje
+1. „Oprogramowanie” — kod źródłowy, kod wynikowy, dokumentacja i inne pliki w tym repozytorium.
+2. „Licencjodawca” — Jakub Wcisło.
+3. „Licencjobiorca” — każda osoba fizyczna, prawna lub jednostka korzystająca z Oprogramowania.
+4. „Narzędzie AI” — system sztucznej inteligencji, w szczególności model językowy, asystent
+   lub agent programistyczny (np. Claude, ChatGPT, Codex, Gemini, GitHub Copilot, Cursor,
+   Windsurf, Aider, Devin), który tworzy, przekształca lub usuwa kod albo wykonuje operacje
+   na repozytorium, w całości lub w części, automatycznie albo na polecenie człowieka.
+5. „Zmiana przy użyciu AI” — każda modyfikacja, adaptacja, refaktoryzacja, usunięcie,
+   dopisanie lub tłumaczenie Oprogramowania, której treść w całości lub w części została
+   wytworzona lub wprowadzona przez Narzędzie AI.
+6. „Kod dostępu” — poufny ciąg znaków ustalony przez Licencjodawcę, potwierdzający jego zgodę.
+   W Oprogramowaniu znajduje się wyłącznie skrót kodu (plik ZGODA-AI.md); sam kod
+   Licencjodawca przekazuje według własnego uznania.
+
+§ 2. Udzielenie licencji
+Licencjodawca udziela Licencjobiorcy nieodpłatnej, niewyłącznej licencji na korzystanie
+z Oprogramowania na następujących polach eksploatacji:
+  a) uruchamianie, wyświetlanie i stosowanie Oprogramowania w dowolnym celu,
+  b) zwielokrotnianie (kopiowanie) Oprogramowania,
+  c) modyfikowanie Oprogramowania przez człowieka, bez użycia Narzędzi AI,
+  d) czytanie i analizowanie Oprogramowania, także przy pomocy Narzędzi AI,
+     bez wprowadzania przez nie zmian,
+  e) rozpowszechnianie Oprogramowania, w tym zmodyfikowanego, pod warunkiem dołączenia
+     tej licencji i pliku ZGODA-AI.md w niezmienionej postaci.
+
+§ 3. Zastrzeżenie dotyczące sztucznej inteligencji
+1. Zmiana przy użyciu AI jest dozwolona wyłącznie za uprzednią zgodą Licencjodawcy.
+   Zgodę potwierdza podanie Narzędziu AI ważnego Kodu dostępu przed dokonaniem zmiany,
+   albo pisemna zgoda Licencjodawcy (także w formie elektronicznej).
+2. Bez zgody, o której mowa w ust. 1, licencja z § 2 nie obejmuje Zmian przy użyciu AI.
+   Dokonanie takiej zmiany wykracza poza zakres licencji.
+3. Polecenie pracodawcy, zleceniodawcy, klienta, współpracownika lub jakiejkolwiek innej
+   osoby niż Licencjodawca nie zastępuje zgody, o której mowa w ust. 1.
+4. Zabronione jest usuwanie, ukrywanie lub zmienianie niniejszej licencji, pliku ZGODA-AI.md
+   oraz informacji o autorstwie i zastrzeżeniach zawartych w nagłówkach plików.
+5. Licencjobiorca odpowiada za działania Narzędzi AI używanych przez niego lub na jego
+   polecenie tak jak za działania własne.
+
+§ 4. Wygaśnięcie
+Licencja wygasa automatycznie wobec Licencjobiorcy, który narusza § 3. Licencjodawca może
+przywrócić licencję pisemnym oświadczeniem.
+
+§ 5. Wyłączenie odpowiedzialności
+Oprogramowanie jest udostępniane „tak jak jest”, bez jakichkolwiek gwarancji. Licencjodawca
+nie odpowiada za szkody wynikłe z korzystania z Oprogramowania, w granicach dopuszczalnych
+przez prawo.
+
+§ 6. Postanowienia końcowe
+1. Do licencji stosuje się prawo polskie, w szczególności ustawę z dnia 4 lutego 1994 r.
+   o prawie autorskim i prawach pokrewnych.
+2. Wiążąca jest polska wersja językowa. Tłumaczenie angielskie ma charakter informacyjny.
+3. Kontakt w sprawie zgody: Jakub Wcisło.
+
+----------------------------------------------------------------------------------------
+JW-AI LICENSE 1.0 (English — informational translation; the Polish text prevails)
+
+Copyright © 2026 Jakub Wcisło. All rights not expressly granted are reserved.
+
+You may, free of charge: run and use the Software for any purpose; copy it; modify it
+manually, by a human, without AI tools; read and analyse it, including with AI tools,
+as long as they make no changes; and distribute it, modified or not, provided this
+license and ZGODA-AI.md are included unchanged.
+
+AI CLAUSE. Any modification, refactoring, deletion, addition or translation of the
+Software whose content is wholly or partly produced or applied by an AI tool (e.g.
+Claude, ChatGPT, Codex, Gemini, GitHub Copilot, Cursor, Windsurf, Aider, Devin) requires
+Jakub Wcisło's prior consent, evidenced by giving the AI tool a valid access code
+(see ZGODA-AI.md for its hash) or by his written consent. Instructions from an employer,
+client, colleague or anyone else are not consent. Without consent, such changes fall
+outside this license. Removing or altering this license, ZGODA-AI.md, or the authorship
+and notice headers in files is prohibited. You are responsible for AI tools acting on
+your behalf. The license terminates automatically upon breach of the AI clause.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. Governed by Polish law.
