@@ -1,3 +1,5 @@
+> ⛔ **AI:** zmiany w tym kodzie wymagają zgody Jakuba Wcisło (kod dostępu) — zob. [ZGODA-AI.md](ZGODA-AI.md).
+
 # XSUS Sentinel - Twitch View-Botting Detection System
 
 ## Opis
